@@ -2,9 +2,10 @@ import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, Da
 import { GAME_CONFIG } from '../data/config';
 import { generateDungeon, generateMonsters, generateChests, getPlayerStartPosition, updateFOV, isWalkable } from './utils/dungeon';
 import { getRandomRunes, createSkill, ALL_RUNES, SKILLS } from '../data/runes';
+import { calculateTalentEffects } from '../data/talents';
 import { generateId, distance, clamp, normalize } from './utils/math';
 import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, getElementColor, getElementGlowColor } from './utils/pixel';
-import { updateSaveData, discoverRune, discoverSkill } from './utils/storage';
+import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData } from './utils/storage';
 
 export class GameEngine {
   private canvas: HTMLCanvasElement | null = null;
@@ -157,10 +158,14 @@ export class GameEngine {
     }
     
     if (this.state.dungeon) {
+      const saveData = loadSaveData();
+      const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
+      const fovRadius = GAME_CONFIG.FOV_RADIUS + talentEffects.fov;
+      
       this.state.dungeon = updateFOV(
         this.state.dungeon,
         player.position,
-        GAME_CONFIG.FOV_RADIUS
+        fovRadius
       );
     }
   }
@@ -412,12 +417,18 @@ export class GameEngine {
   private nextLevel() {
     this.state.currentLevel++;
     
+    const saveData = loadSaveData();
+    const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
+    
     const newDungeon = generateDungeon(this.state.currentLevel);
     const newMonsters = generateMonsters(newDungeon, this.state.currentLevel);
     const newChests = generateChests(newDungeon, this.state.currentLevel);
     const startPos = getPlayerStartPosition(newDungeon);
     
-    this.state.dungeon = newDungeon;
+    const fovRadius = GAME_CONFIG.FOV_RADIUS + talentEffects.fov;
+    const updatedDungeon = updateFOV(newDungeon, startPos, fovRadius);
+    
+    this.state.dungeon = updatedDungeon;
     this.state.monsters = newMonsters;
     this.state.chests = newChests;
     this.state.player.position = { ...startPos };
@@ -430,7 +441,11 @@ export class GameEngine {
   }
   
   public startGame() {
-    const initialRunes = getRandomRunes(4);
+    const saveData = loadSaveData();
+    const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
+    
+    const baseRuneCount = 4 + talentEffects.startRunes;
+    const initialRunes = getRandomRunes(Math.max(4, Math.min(baseRuneCount, 8)));
     const equipped: (Rune | null)[] = [null, null, null, null];
     
     initialRunes.forEach((rune, i) => {
@@ -442,7 +457,11 @@ export class GameEngine {
     const chests = generateChests(dungeon, 1);
     const startPos = getPlayerStartPosition(dungeon);
     
-    const updatedDungeon = updateFOV(dungeon, startPos, GAME_CONFIG.FOV_RADIUS);
+    const fovRadius = GAME_CONFIG.FOV_RADIUS + talentEffects.fov;
+    const updatedDungeon = updateFOV(dungeon, startPos, fovRadius);
+    
+    const maxHp = GAME_CONFIG.PLAYER_MAX_HP + talentEffects.maxHp;
+    const speed = GAME_CONFIG.PLAYER_SPEED * (1 + talentEffects.speed);
     
     this.state.scene = 'playing';
     this.state.dungeon = updatedDungeon;
@@ -459,9 +478,9 @@ export class GameEngine {
     this.state.activeSkills = [];
     this.state.player = {
       position: { ...startPos },
-      hp: GAME_CONFIG.PLAYER_MAX_HP,
-      maxHp: GAME_CONFIG.PLAYER_MAX_HP,
-      speed: GAME_CONFIG.PLAYER_SPEED,
+      hp: maxHp,
+      maxHp: maxHp,
+      speed: speed,
       direction: 1,
       animFrame: 0,
       animTimer: 0,
@@ -480,9 +499,16 @@ export class GameEngine {
   private gameOver() {
     this.state.scene = 'gameover';
     
-    const saveData = updateSaveData({
-      totalKills: (window as any).totalKills ? (window as any).totalKills + this.state.killCount : this.state.killCount,
+    const talentPointsEarned = Math.max(1, Math.floor(this.state.currentLevel / 2) + Math.floor(this.state.killCount / 10));
+    
+    const saveData = addTalentPoints(talentPointsEarned);
+    
+    updateSaveData({
+      totalKills: saveData.totalKills + this.state.killCount,
+      highestLevel: Math.max(this.state.currentLevel, saveData.highestLevel),
     });
+    
+    (window as any).earnedTalentPoints = talentPointsEarned;
     
     this.notifyStateChange();
   }
@@ -662,7 +688,11 @@ export class GameEngine {
     if (monster.hp <= 0) {
       this.state.killCount++;
       
-      if (Math.random() < monster.dropChance) {
+      const saveData = loadSaveData();
+      const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
+      const adjustedDropChance = monster.dropChance * (1 + talentEffects.runeDrop);
+      
+      if (Math.random() < adjustedDropChance) {
         const rune = ALL_RUNES[Math.floor(Math.random() * ALL_RUNES.length)];
         this.state.runeInventory.push({ ...rune });
         discoverRune(rune.id);
@@ -762,6 +792,9 @@ export class GameEngine {
   }
   
   public updateSkillsFromRunes() {
+    const saveData = loadSaveData();
+    const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
+    
     const skills: Skill[] = [];
     const equipped = this.state.equippedRunes.filter(r => r !== null) as Rune[];
     
@@ -772,6 +805,12 @@ export class GameEngine {
       for (const effRune of effectRunes) {
         const skill = createSkill(elemRune, effRune);
         if (skill) {
+          const damageMultiplier = 1 + talentEffects.damage;
+          const cooldownMultiplier = 1 - talentEffects.attackSpeed;
+          
+          skill.damage = Math.floor(skill.damage * damageMultiplier);
+          skill.cooldown = Math.floor(skill.cooldown * Math.max(0.5, cooldownMultiplier));
+          
           skills.push(skill);
           discoverSkill(skill.id);
         }

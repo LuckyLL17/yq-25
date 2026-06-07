@@ -1,9 +1,9 @@
 import { getGameEngine } from '../game/GameEngine';
 import { useGameStore } from '../store/gameStore';
-import { Skull, RefreshCw, Trophy, Swords, Map, Sparkles } from 'lucide-react';
+import { Skull, RefreshCw, Trophy, Swords, Map, Sparkles, TreeDeciduous } from 'lucide-react';
 
 const DeathScreen = () => {
-  const { currentLevel, killCount, scene } = useGameStore();
+  const { currentLevel, killCount, scene, earnedTalentPoints, setShowTalentTree, saveData } = useGameStore();
   const engine = getGameEngine();
   
   if (scene !== 'gameover') return null;
@@ -15,6 +15,10 @@ const DeathScreen = () => {
   const handleMainMenu = () => {
     const state = engine.getState();
     state.scene = 'menu';
+  };
+  
+  const handleOpenTalents = () => {
+    setShowTalentTree(true);
   };
   
   return (
@@ -47,7 +51,28 @@ const DeathScreen = () => {
           </div>
         </div>
         
+        {earnedTalentPoints > 0 && (
+          <div className="bg-gradient-to-r from-yellow-900/50 to-orange-900/50 border-2 border-yellow-500 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <Sparkles className="w-5 h-5 text-yellow-400 animate-pulse" />
+              <span className="text-yellow-400 font-bold text-lg">获得天赋点！</span>
+            </div>
+            <div className="text-3xl font-bold text-yellow-300">+{earnedTalentPoints}</div>
+            <div className="text-xs text-yellow-200/70 mt-1">
+              当前总天赋点: {saveData.talentPoints}
+            </div>
+          </div>
+        )}
+        
         <div className="space-y-3">
+          <button
+            onClick={handleOpenTalents}
+            className="w-full py-3 px-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-lg border-2 border-purple-400 transition-all hover:scale-105 flex items-center justify-center gap-2"
+          >
+            <TreeDeciduous className="w-5 h-5" />
+            升级天赋树
+          </button>
+          
           <button
             onClick={handleRestart}
             className="w-full py-3 px-6 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white font-bold rounded-lg border-2 border-green-400 transition-all hover:scale-105 flex items-center justify-center gap-2"

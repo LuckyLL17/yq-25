@@ -6,6 +6,8 @@ const defaultSaveData = {
   discoveredRunes: [] as string[],
   discoveredSkills: [] as string[],
   highScore: 0,
+  talentPoints: 0,
+  unlockedTalents: {} as Record<string, number>,
 };
 
 export const loadSaveData = () => {
@@ -50,5 +52,22 @@ export const discoverSkill = (skillId: string) => {
     data.discoveredSkills.push(skillId);
     saveSaveData(data);
   }
+  return data;
+};
+
+export const addTalentPoints = (points: number) => {
+  const data = loadSaveData();
+  data.talentPoints += points;
+  saveSaveData(data);
+  return data;
+};
+
+export const unlockTalent = (talentId: string, cost: number) => {
+  const data = loadSaveData();
+  if (data.talentPoints < cost) return data;
+  
+  data.talentPoints -= cost;
+  data.unlockedTalents[talentId] = (data.unlockedTalents[talentId] || 0) + 1;
+  saveSaveData(data);
   return data;
 };

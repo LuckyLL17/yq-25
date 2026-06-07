@@ -190,4 +190,43 @@ export interface SaveData {
   discoveredRunes: string[];
   discoveredSkills: string[];
   highScore: number;
+  talentPoints: number;
+  unlockedTalents: Record<string, number>;
+}
+
+export type TalentEffectType = 
+  | 'maxHp' 
+  | 'speed' 
+  | 'damage' 
+  | 'attackSpeed' 
+  | 'runeDrop' 
+  | 'startRunes'
+  | 'fov'
+  | 'goldBonus';
+
+export interface TalentEffect {
+  type: TalentEffectType;
+  value: number;
+}
+
+export interface TalentNode {
+  id: string;
+  name: string;
+  description: string;
+  maxLevel: number;
+  costPerLevel: number;
+  effects: TalentEffect[];
+  position: { x: number; y: number };
+  requires: string[];
+  branch: TalentBranchType;
+}
+
+export type TalentBranchType = 'survival' | 'attack' | 'exploration';
+
+export interface TalentBranch {
+  id: TalentBranchType;
+  name: string;
+  color: string;
+  icon: string;
+  description: string;
 }

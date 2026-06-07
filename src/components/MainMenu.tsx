@@ -1,12 +1,12 @@
 import { getGameEngine } from '../game/GameEngine';
 import { useGameStore } from '../store/gameStore';
-import { Play, BookOpen, Sparkles, Flame, Snowflake, Zap, Layers, Clock, ZapOff, Target, Lock } from 'lucide-react';
+import { Play, BookOpen, Sparkles, Flame, Snowflake, Zap, Layers, Clock, ZapOff, Target, Lock, TreeDeciduous } from 'lucide-react';
 import { useState } from 'react';
 import { ALL_RUNES, SKILLS } from '../data/runes';
 import type { Rune, Skill } from '../types/game';
 
 const MainMenu = () => {
-  const { scene, saveData } = useGameStore();
+  const { scene, saveData, setShowTalentTree } = useGameStore();
   const engine = getGameEngine();
   const [showCodex, setShowCodex] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -15,6 +15,10 @@ const MainMenu = () => {
   
   const handleStartGame = () => {
     engine.startGame();
+  };
+  
+  const handleOpenTalents = () => {
+    setShowTalentTree(true);
   };
   
   const getRuneIcon = (rune: Rune) => {
@@ -318,6 +322,19 @@ const MainMenu = () => {
         >
           <Play className="w-7 h-7" />
           开始冒险
+        </button>
+        
+        <button
+          onClick={handleOpenTalents}
+          className="w-full py-3 px-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-xl border-4 border-purple-400 shadow-lg transition-all hover:scale-105 flex items-center justify-center gap-2 relative"
+        >
+          <TreeDeciduous className="w-5 h-5" />
+          天赋树
+          {saveData.talentPoints > 0 && (
+            <span className="absolute -top-2 -right-2 bg-yellow-500 text-yellow-900 text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-yellow-300 animate-bounce">
+              {saveData.talentPoints}
+            </span>
+          )}
         </button>
         
         <button

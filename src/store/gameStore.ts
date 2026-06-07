@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { GameScene, Rune, Skill, Player, Monster, Chest, SaveData } from '../types/game';
-import { loadSaveData } from '../game/utils/storage';
+import { loadSaveData, unlockTalent as saveUnlockTalent } from '../game/utils/storage';
+import { getTalentCost, canUnlockTalent } from '../data/talents';
 
 interface ToastMessage {
   id: string;
@@ -25,8 +26,10 @@ interface GameStore {
   combineSlot1: Rune | null;
   combineSlot2: Rune | null;
   showRunePanel: boolean;
+  showTalentTree: boolean;
   toasts: ToastMessage[];
   draggedRune: Rune | null;
+  earnedTalentPoints: number;
   
   setScene: (scene: GameScene) => void;
   setPlayer: (player: Player) => void;
@@ -41,10 +44,12 @@ interface GameStore {
   setCombineSlot1: (rune: Rune | null) => void;
   setCombineSlot2: (rune: Rune | null) => void;
   setShowRunePanel: (show: boolean) => void;
+  setShowTalentTree: (show: boolean) => void;
   setDraggedRune: (rune: Rune | null) => void;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   removeToast: (id: string) => void;
   refreshSaveData: () => void;
+  unlockTalent: (talentId: string) => void;
   updateFromEngine: (state: any) => void;
 }
 
@@ -63,8 +68,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   combineSlot1: null,
   combineSlot2: null,
   showRunePanel: false,
+  showTalentTree: false,
   toasts: [],
   draggedRune: null,
+  earnedTalentPoints: 0,
   
   setScene: (scene) => set({ scene }),
   setPlayer: (player) => set({ player }),
@@ -79,6 +86,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setCombineSlot1: (combineSlot1) => set({ combineSlot1 }),
   setCombineSlot2: (combineSlot2) => set({ combineSlot2 }),
   setShowRunePanel: (showRunePanel) => set({ showRunePanel }),
+  setShowTalentTree: (showTalentTree) => set({ showTalentTree }),
   setDraggedRune: (draggedRune) => set({ draggedRune }),
   
   addToast: (toast) => {
@@ -97,18 +105,47 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ saveData: loadSaveData() });
   },
   
-  updateFromEngine: (state) => set({
-    scene: state.scene,
-    player: state.player,
-    runeInventory: state.runeInventory,
-    equippedRunes: state.equippedRunes,
-    activeSkills: state.activeSkills,
-    currentLevel: state.currentLevel,
-    killCount: state.killCount,
-    gold: state.gold,
-    monsters: state.monsters,
-    chests: state.chests,
-    combineSlot1: state.combineSlot1,
-    combineSlot2: state.combineSlot2,
-  }),
+  unlockTalent: (talentId) => {
+    const state = get();
+    const { unlockedTalents, talentPoints } = state.saveData;
+    
+    if (!canUnlockTalent(talentId, unlockedTalents)) return;
+    
+    const cost = getTalentCost(talentId, unlockedTalents);
+    if (talentPoints < cost) return;
+    
+    const newSaveData = saveUnlockTalent(talentId, cost);
+    set({ saveData: newSaveData });
+    
+    get().addToast({
+      type: 'success',
+      title: '天赋升级！',
+      description: `消耗 ${cost} 天赋点`,
+      color: '#ffd700',
+    });
+  },
+  
+  updateFromEngine: (state) => {
+    const earnedPoints = (window as any).earnedTalentPoints || 0;
+    set({
+      scene: state.scene,
+      player: state.player,
+      runeInventory: state.runeInventory,
+      equippedRunes: state.equippedRunes,
+      activeSkills: state.activeSkills,
+      currentLevel: state.currentLevel,
+      killCount: state.killCount,
+      gold: state.gold,
+      monsters: state.monsters,
+      chests: state.chests,
+      combineSlot1: state.combineSlot1,
+      combineSlot2: state.combineSlot2,
+      earnedTalentPoints: earnedPoints,
+    });
+    
+    if (state.scene === 'gameover') {
+      set({ saveData: loadSaveData() });
+      (window as any).earnedTalentPoints = 0;
+    }
+  },
 }));

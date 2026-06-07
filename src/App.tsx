@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import MainMenu from './components/MainMenu';
 import GameCanvas from './components/GameCanvas';
 import ToastContainer from './components/ToastContainer';
+import TalentTree from './components/TalentTree';
 import { useGameStore } from './store/gameStore';
 import { getGameEngine } from './game/GameEngine';
 
@@ -42,6 +43,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-900 relative">
       <ToastContainer />
+      <TalentTree />
       {scene === 'menu' ? <MainMenu /> : <GameCanvas />}
     </div>
   );
