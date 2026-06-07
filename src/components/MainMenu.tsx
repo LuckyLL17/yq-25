@@ -1,7 +1,9 @@
 import { getGameEngine } from '../game/GameEngine';
 import { useGameStore } from '../store/gameStore';
-import { Play, BookOpen, Sparkles, Flame, Snowflake, Zap, Layers, Clock, ZapOff, Target, Cat } from 'lucide-react';
+import { Play, BookOpen, Sparkles, Flame, Snowflake, Zap, Layers, Clock, ZapOff, Target, Lock } from 'lucide-react';
 import { useState } from 'react';
+import { ALL_RUNES, SKILLS } from '../data/runes';
+import type { Rune, Skill } from '../types/game';
 
 const MainMenu = () => {
   const { scene, saveData } = useGameStore();
@@ -15,10 +17,33 @@ const MainMenu = () => {
     engine.startGame();
   };
   
+  const getRuneIcon = (rune: Rune) => {
+    if (rune.type === 'element') {
+      switch (rune.element) {
+        case 'fire': return <Flame className="w-6 h-6 text-white" />;
+        case 'ice': return <Snowflake className="w-6 h-6 text-white" />;
+        case 'thunder': return <Zap className="w-6 h-6 text-white" />;
+        default: return <Sparkles className="w-6 h-6 text-white" />;
+      }
+    } else {
+      switch (rune.effect) {
+        case 'spread': return <Layers className="w-6 h-6 text-white" />;
+        case 'time': return <Clock className="w-6 h-6 text-white" />;
+        case 'power': return <ZapOff className="w-6 h-6 text-white" />;
+        case 'pierce': return <Target className="w-6 h-6 text-white" />;
+        default: return <Sparkles className="w-6 h-6 text-white" />;
+      }
+    }
+  };
+
+  const elementRunes = ALL_RUNES.filter(r => r.type === 'element');
+  const effectRunes = ALL_RUNES.filter(r => r.type === 'effect');
+  const allSkills = Object.values(SKILLS);
+
   if (showCodex) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center p-4">
-        <div className="bg-gray-900/90 border-4 border-purple-500 rounded-xl p-8 max-w-3xl w-full max-h-[80vh] overflow-y-auto">
+        <div className="bg-gray-900/90 border-4 border-purple-500 rounded-xl p-8 max-w-4xl w-full max-h-[85vh] overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-3xl font-bold text-purple-300 flex items-center gap-2">
               <BookOpen className="w-8 h-8" />
@@ -31,34 +56,130 @@ const MainMenu = () => {
               ✕
             </button>
           </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {['火焰符文', '冰霜符文', '雷电符文', '扩散符文', '时间符文', '强化符文', '穿透符文'].map((name, i) => {
-              const colors = ['#ff6b35', '#4ecdc4', '#ffe66d', '#95e1d3', '#a29bfe', '#fd79a8', '#74b9ff'];
-              return (
-                <div key={name} className="bg-gray-800 border-2 border-gray-600 rounded-lg p-4 text-center">
+
+          <div className="mb-6">
+            <h3 className="text-xl font-bold text-orange-400 mb-4 flex items-center gap-2">
+              <Flame className="w-5 h-5" />
+              元素符文 ({saveData.discoveredRunes.filter(id => elementRunes.some(r => r.id === id)).length}/{elementRunes.length})
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {elementRunes.map((rune) => {
+                const discovered = saveData.discoveredRunes.includes(rune.id);
+                return (
                   <div
-                    className="w-16 h-16 mx-auto mb-3 rounded-full flex items-center justify-center"
-                    style={{ backgroundColor: colors[i] }}
+                    key={rune.id}
+                    className={`rounded-lg p-4 text-center border-2 transition-all ${
+                      discovered
+                        ? 'bg-gray-800 border-gray-600'
+                        : 'bg-gray-900/50 border-gray-800 opacity-60'
+                    }`}
                   >
-                    <Sparkles className="w-8 h-8 text-white" />
+                    <div
+                      className={`w-16 h-16 mx-auto mb-3 rounded-full flex items-center justify-center ${
+                        discovered ? '' : 'bg-gray-700'
+                      }`}
+                      style={discovered ? { backgroundColor: rune.color } : {}}
+                    >
+                      {discovered ? getRuneIcon(rune) : <Lock className="w-6 h-6 text-gray-500" />}
+                    </div>
+                    <h3 className={`font-bold mb-1 ${discovered ? 'text-white' : 'text-gray-500'}`}>
+                      {discovered ? rune.name : '???'}
+                    </h3>
+                    <p className={`text-xs ${discovered ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {discovered ? rune.description : '未发现'}
+                    </p>
                   </div>
-                  <h3 className="text-white font-bold mb-1">{name}</h3>
-                  <p className="text-gray-400 text-xs">已发现</p>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <h3 className="text-xl font-bold text-cyan-400 mb-4 flex items-center gap-2">
+              <Layers className="w-5 h-5" />
+              效果符文 ({saveData.discoveredRunes.filter(id => effectRunes.some(r => r.id === id)).length}/{effectRunes.length})
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {effectRunes.map((rune) => {
+                const discovered = saveData.discoveredRunes.includes(rune.id);
+                return (
+                  <div
+                    key={rune.id}
+                    className={`rounded-lg p-4 text-center border-2 transition-all ${
+                      discovered
+                        ? 'bg-gray-800 border-gray-600'
+                        : 'bg-gray-900/50 border-gray-800 opacity-60'
+                    }`}
+                  >
+                    <div
+                      className={`w-14 h-14 mx-auto mb-3 rounded-full flex items-center justify-center ${
+                        discovered ? '' : 'bg-gray-700'
+                      }`}
+                      style={discovered ? { backgroundColor: rune.color } : {}}
+                    >
+                      {discovered ? getRuneIcon(rune) : <Lock className="w-5 h-5 text-gray-500" />}
+                    </div>
+                    <h3 className={`font-bold text-sm mb-1 ${discovered ? 'text-white' : 'text-gray-500'}`}>
+                      {discovered ? rune.name : '???'}
+                    </h3>
+                    <p className={`text-xs ${discovered ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {discovered ? rune.description : '未发现'}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
           
-          <div className="mt-8">
-            <h3 className="text-xl font-bold text-yellow-400 mb-4">组合技能</h3>
+          <div>
+            <h3 className="text-xl font-bold text-yellow-400 mb-4 flex items-center gap-2">
+              <Sparkles className="w-5 h-5" />
+              组合技能 ({saveData.discoveredSkills.length}/{allSkills.length})
+            </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {['烈焰风暴', '寒冰新星', '连锁闪电', '陨石坠落', '神罚之雷', '穿透雷弧'].map((name, i) => (
-                <div key={name} className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-                  <span className="text-white font-bold text-sm">{name}</span>
-                  <p className="text-gray-500 text-xs mt-1">已发现</p>
-                </div>
-              ))}
+              {allSkills.map((skill) => {
+                const discovered = saveData.discoveredSkills.includes(skill.id);
+                const elemRune = ALL_RUNES.find(r => r.id === skill.elementRuneId);
+                return (
+                  <div
+                    key={skill.id}
+                    className={`rounded-lg p-3 border transition-all ${
+                      discovered
+                        ? 'bg-gray-800/50 border-gray-700'
+                        : 'bg-gray-900/30 border-gray-800 opacity-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {discovered && elemRune ? (
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center"
+                          style={{ backgroundColor: elemRune.color }}
+                        >
+                          {getRuneIcon(elemRune)}
+                        </div>
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center">
+                          <Lock className="w-4 h-4 text-gray-500" />
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <span className={`font-bold text-sm ${discovered ? 'text-white' : 'text-gray-500'}`}>
+                          {discovered ? skill.name : '???'}
+                        </span>
+                        <p className={`text-xs mt-0.5 ${discovered ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {discovered ? skill.description : '未发现'}
+                        </p>
+                      </div>
+                    </div>
+                    {discovered && (
+                      <div className="flex gap-3 mt-2 text-xs">
+                        <span className="text-red-400">伤害: {skill.damage}</span>
+                        <span className="text-blue-400">冷却: {skill.cooldown / 1000}s</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -86,7 +207,7 @@ const MainMenu = () => {
               <ul className="space-y-1 text-sm">
                 <li>• <span className="text-white font-mono">WASD</span> / <span className="text-white font-mono">方向键</span> - 移动</li>
                 <li>• <span className="text-white font-mono">空格键</span> - 与物品互动</li>
-                <li>• <span className="text-white font-mono">1 / 2 / 3</span> - 释放技能</li>
+                <li>• <span className="text-white font-mono">1 / 2 / 3 / 4</span> - 释放技能</li>
               </ul>
             </div>
             

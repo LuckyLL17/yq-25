@@ -2,6 +2,14 @@ import { create } from 'zustand';
 import type { GameScene, Rune, Skill, Player, Monster, Chest, SaveData } from '../types/game';
 import { loadSaveData } from '../game/utils/storage';
 
+interface ToastMessage {
+  id: string;
+  type: 'rune' | 'info' | 'success';
+  title: string;
+  description?: string;
+  color?: string;
+}
+
 interface GameStore {
   scene: GameScene;
   player: Player | null;
@@ -17,6 +25,8 @@ interface GameStore {
   combineSlot1: Rune | null;
   combineSlot2: Rune | null;
   showRunePanel: boolean;
+  toasts: ToastMessage[];
+  draggedRune: Rune | null;
   
   setScene: (scene: GameScene) => void;
   setPlayer: (player: Player) => void;
@@ -31,10 +41,14 @@ interface GameStore {
   setCombineSlot1: (rune: Rune | null) => void;
   setCombineSlot2: (rune: Rune | null) => void;
   setShowRunePanel: (show: boolean) => void;
+  setDraggedRune: (rune: Rune | null) => void;
+  addToast: (toast: Omit<ToastMessage, 'id'>) => void;
+  removeToast: (id: string) => void;
+  refreshSaveData: () => void;
   updateFromEngine: (state: any) => void;
 }
 
-export const useGameStore = create<GameStore>((set) => ({
+export const useGameStore = create<GameStore>((set, get) => ({
   scene: 'menu',
   player: null,
   monsters: [],
@@ -49,6 +63,8 @@ export const useGameStore = create<GameStore>((set) => ({
   combineSlot1: null,
   combineSlot2: null,
   showRunePanel: false,
+  toasts: [],
+  draggedRune: null,
   
   setScene: (scene) => set({ scene }),
   setPlayer: (player) => set({ player }),
@@ -63,6 +79,23 @@ export const useGameStore = create<GameStore>((set) => ({
   setCombineSlot1: (combineSlot1) => set({ combineSlot1 }),
   setCombineSlot2: (combineSlot2) => set({ combineSlot2 }),
   setShowRunePanel: (showRunePanel) => set({ showRunePanel }),
+  setDraggedRune: (draggedRune) => set({ draggedRune }),
+  
+  addToast: (toast) => {
+    const id = Math.random().toString(36).substring(2, 9);
+    set((state) => ({ toasts: [...state.toasts, { ...toast, id }] }));
+    setTimeout(() => {
+      get().removeToast(id);
+    }, 3000);
+  },
+  
+  removeToast: (id) => {
+    set((state) => ({ toasts: state.toasts.filter(t => t.id !== id) }));
+  },
+  
+  refreshSaveData: () => {
+    set({ saveData: loadSaveData() });
+  },
   
   updateFromEngine: (state) => set({
     scene: state.scene,

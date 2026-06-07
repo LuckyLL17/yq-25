@@ -16,6 +16,7 @@ export class GameEngine {
   
   public state: GameState;
   public onStateChange: (() => void) | null = null;
+  public onChestOpened: ((rewards: { runes: Rune[] }) => void) | null = null;
   
   constructor() {
     this.state = this.createInitialState();
@@ -373,11 +374,14 @@ export class GameEngine {
   
   private openChest(chest: Chest) {
     chest.opened = true;
+    const rewardRunes: Rune[] = [];
     
     for (const runeId of chest.rewardRuneIds) {
       const rune = ALL_RUNES.find(r => r.id === runeId);
       if (rune) {
-        this.state.runeInventory.push({ ...rune });
+        const runeCopy = { ...rune };
+        this.state.runeInventory.push(runeCopy);
+        rewardRunes.push(runeCopy);
         discoverRune(rune.id);
         
         this.addDamageNumber(
@@ -396,6 +400,10 @@ export class GameEngine {
         '#ffd700',
         'magic'
       );
+    }
+    
+    if (this.onChestOpened && rewardRunes.length > 0) {
+      this.onChestOpened({ runes: rewardRunes });
     }
     
     this.notifyStateChange();
@@ -726,7 +734,8 @@ export class GameEngine {
     if (this.state.scene === 'playing') {
       if (key === '1') this.useSkill(0);
       if (key === '2') this.useSkill(1);
-      if (key === '3') this.useSkill(3);
+      if (key === '3') this.useSkill(2);
+      if (key === '4') this.useSkill(3);
     }
   }
   
@@ -752,7 +761,7 @@ export class GameEngine {
     this.notifyStateChange();
   }
   
-  private updateSkillsFromRunes() {
+  public updateSkillsFromRunes() {
     const skills: Skill[] = [];
     const equipped = this.state.equippedRunes.filter(r => r !== null) as Rune[];
     
@@ -769,7 +778,7 @@ export class GameEngine {
       }
     }
     
-    this.state.activeSkills = skills.slice(0, 3);
+    this.state.activeSkills = skills.slice(0, GAME_CONFIG.MAX_RUNE_SLOTS);
   }
   
   private render() {
