@@ -14,6 +14,7 @@ export class GameEngine {
   private lastTime: number = 0;
   private keys: Set<string> = new Set();
   private isRunning: boolean = false;
+  private hpRegenTimer: number = 0;
   
   public state: GameState;
   public onStateChange: (() => void) | null = null;
@@ -62,6 +63,7 @@ export class GameEngine {
       combineSlot1: null,
       combineSlot2: null,
       camera: { x: 0, y: 0 },
+      earnedTalentPoints: 0,
     };
   }
   
@@ -112,6 +114,7 @@ export class GameEngine {
     this.updateCamera();
     this.checkChestCollision();
     this.checkStairsCollision();
+    this.updateHpRegen(deltaTime);
     
     if (this.state.player.hp <= 0) {
       this.gameOver();
@@ -339,6 +342,24 @@ export class GameEngine {
     }
   }
   
+  private updateHpRegen(deltaTime: number) {
+    const saveData = loadSaveData();
+    const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
+    
+    if (talentEffects.hpRegen > 0) {
+      this.hpRegenTimer += deltaTime;
+      const regenInterval = 1000;
+      
+      while (this.hpRegenTimer >= regenInterval) {
+        this.hpRegenTimer -= regenInterval;
+        const player = this.state.player;
+        if (player.hp < player.maxHp) {
+          player.hp = Math.min(player.maxHp, player.hp + talentEffects.hpRegen);
+        }
+      }
+    }
+  }
+  
   private updateCamera() {
     if (!this.canvas) return;
     
@@ -444,6 +465,8 @@ export class GameEngine {
     const saveData = loadSaveData();
     const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
     
+    this.hpRegenTimer = 0;
+    
     const baseRuneCount = 4 + talentEffects.startRunes;
     const initialRunes = getRandomRunes(Math.max(4, Math.min(baseRuneCount, 8)));
     const equipped: (Rune | null)[] = [null, null, null, null];
@@ -476,6 +499,7 @@ export class GameEngine {
     this.state.runeInventory = initialRunes;
     this.state.equippedRunes = equipped;
     this.state.activeSkills = [];
+    this.state.earnedTalentPoints = 0;
     this.state.player = {
       position: { ...startPos },
       hp: maxHp,
@@ -500,6 +524,7 @@ export class GameEngine {
     this.state.scene = 'gameover';
     
     const talentPointsEarned = Math.max(1, Math.floor(this.state.currentLevel / 2) + Math.floor(this.state.killCount / 10));
+    this.state.earnedTalentPoints = talentPointsEarned;
     
     const saveData = addTalentPoints(talentPointsEarned);
     
@@ -507,8 +532,6 @@ export class GameEngine {
       totalKills: saveData.totalKills + this.state.killCount,
       highestLevel: Math.max(this.state.currentLevel, saveData.highestLevel),
     });
-    
-    (window as any).earnedTalentPoints = talentPointsEarned;
     
     this.notifyStateChange();
   }
@@ -654,11 +677,26 @@ export class GameEngine {
     effect: string,
     isCrit: boolean = false
   ) {
-    const finalDamage = isCrit ? damage * 2 : damage;
+    const saveData = loadSaveData();
+    const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
+    
+    let finalDamage = damage;
+    let actuallyCrit = isCrit;
+    
+    if (!isCrit && talentEffects.critChance > 0) {
+      if (Math.random() < talentEffects.critChance) {
+        actuallyCrit = true;
+        const critMultiplier = 2 + talentEffects.critDamage;
+        finalDamage = Math.floor(damage * critMultiplier);
+      }
+    } else if (isCrit) {
+      finalDamage = Math.floor(damage * (2 + talentEffects.critDamage));
+    }
+    
     monster.hp -= finalDamage;
     
     const color = getElementColor(element as any);
-    this.addDamageNumber(monster.position, finalDamage, color, isCrit);
+    this.addDamageNumber(monster.position, finalDamage, color, actuallyCrit);
     
     if (element === 'fire') {
       if (!monster.statusEffects.find(s => s.type === 'burn')) {
@@ -712,10 +750,14 @@ export class GameEngine {
   private damagePlayer(damage: number) {
     if (this.state.player.invincible > 0) return;
     
-    this.state.player.hp -= damage;
+    const saveData = loadSaveData();
+    const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
+    const finalDamage = Math.max(1, Math.floor(damage * (1 - talentEffects.damageReduction)));
+    
+    this.state.player.hp -= finalDamage;
     this.state.player.invincible = GAME_CONFIG.INVINCIBLE_DURATION;
     
-    this.addDamageNumber(this.state.player.position, damage, '#ff4757', false);
+    this.addDamageNumber(this.state.player.position, finalDamage, '#ff4757', false);
     
     for (let i = 0; i < 8; i++) {
       this.addParticle(

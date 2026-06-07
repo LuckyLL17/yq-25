@@ -50,10 +50,10 @@ export const TALENT_NODES: TalentNode[] = [
   {
     id: 'survival_regen',
     name: '快速恢复',
-    description: '每5秒恢复1点生命',
-    maxLevel: 3,
+    description: '每秒恢复生命',
+    maxLevel: 5,
     costPerLevel: 2,
-    effects: [{ type: 'maxHp', value: 10 }],
+    effects: [{ type: 'hpRegen', value: 1 }],
     position: { x: 1, y: 1 },
     requires: ['survival_hp_1'],
     branch: 'survival',
@@ -61,10 +61,10 @@ export const TALENT_NODES: TalentNode[] = [
   {
     id: 'survival_tough',
     name: '铜墙铁壁',
-    description: '受到伤害减少10%',
-    maxLevel: 3,
+    description: '受到伤害减少',
+    maxLevel: 5,
     costPerLevel: 3,
-    effects: [{ type: 'maxHp', value: 50 }],
+    effects: [{ type: 'damageReduction', value: 0.05 }],
     position: { x: 0, y: 2 },
     requires: ['survival_hp_2'],
     branch: 'survival',
@@ -105,10 +105,13 @@ export const TALENT_NODES: TalentNode[] = [
   {
     id: 'attack_crit',
     name: '致命一击',
-    description: '暴击伤害 +20%',
-    maxLevel: 3,
+    description: '暴击率和暴击伤害提升',
+    maxLevel: 5,
     costPerLevel: 3,
-    effects: [{ type: 'damage', value: 0.2 }],
+    effects: [
+      { type: 'critChance', value: 0.05 },
+      { type: 'critDamage', value: 0.15 },
+    ],
     position: { x: 0, y: 2 },
     requires: ['attack_damage_2'],
     branch: 'attack',
@@ -180,6 +183,10 @@ export const calculateTalentEffects = (unlockedTalents: Record<string, number>) 
     startRunes: 0,
     fov: 0,
     goldBonus: 0,
+    hpRegen: 0,
+    damageReduction: 0,
+    critChance: 0,
+    critDamage: 0,
   };
 
   for (const node of TALENT_NODES) {

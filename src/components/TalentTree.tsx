@@ -29,6 +29,54 @@ const TalentTree = () => {
     return saveData.unlockedTalents[nodeId] || 0;
   };
   
+  const getEffectDescription = (node: TalentNode, level: number) => {
+    const effects = node.effects;
+    const descriptions: string[] = [];
+    
+    for (const effect of effects) {
+      const value = effect.value * (level || 1);
+      switch (effect.type) {
+        case 'maxHp':
+          descriptions.push(`最大生命 +${value}`);
+          break;
+        case 'speed':
+          descriptions.push(`移速 +${Math.round(value * 100)}%`);
+          break;
+        case 'damage':
+          descriptions.push(`伤害 +${Math.round(value * 100)}%`);
+          break;
+        case 'attackSpeed':
+          descriptions.push(`冷却 -${Math.round(value * 100)}%`);
+          break;
+        case 'runeDrop':
+          descriptions.push(`符文掉落 +${Math.round(value * 100)}%`);
+          break;
+        case 'startRunes':
+          descriptions.push(`初始符文 +${value}`);
+          break;
+        case 'fov':
+          descriptions.push(`视野 +${value}`);
+          break;
+        case 'hpRegen':
+          descriptions.push(`每秒回复 ${value} 生命`);
+          break;
+        case 'damageReduction':
+          descriptions.push(`伤害减免 ${Math.round(value * 100)}%`);
+          break;
+        case 'critChance':
+          descriptions.push(`暴击率 +${Math.round(value * 100)}%`);
+          break;
+        case 'critDamage':
+          descriptions.push(`暴伤 +${Math.round(value * 100)}%`);
+          break;
+        default:
+          break;
+      }
+    }
+    
+    return descriptions.join('，');
+  };
+  
   const renderTalentNode = (node: TalentNode, branchColor: string) => {
     const level = getNodeLevel(node.id);
     const isMaxed = level >= node.maxLevel;
@@ -86,8 +134,13 @@ const TalentTree = () => {
             {node.name}
           </div>
           <div className={`text-xs ${level > 0 || canUnlock ? 'text-gray-400' : 'text-gray-600'}`}>
-            {node.description}
+            {level > 0 || canUnlock ? getEffectDescription(node, 1) : '???'}
           </div>
+          {level > 0 && (
+            <div className="text-xs text-green-400 mt-0.5">
+              当前: {getEffectDescription(node, level)}
+            </div>
+          )}
           {!isMaxed && (
             <div className={`text-xs mt-1 ${canAfford ? 'text-yellow-400' : 'text-gray-500'}`}>
               {canUnlock ? `消耗: ${cost} 点` : '需要前置天赋'}
@@ -199,6 +252,18 @@ const TalentTree = () => {
             <div className="text-center">
               <div className="text-blue-400 font-bold">+{Math.round(effects.speed * 100)}%</div>
               <div className="text-gray-500 text-xs">移动速度</div>
+            </div>
+            <div className="text-center">
+              <div className="text-green-400 font-bold">+{effects.hpRegen}/s</div>
+              <div className="text-gray-500 text-xs">生命回复</div>
+            </div>
+            <div className="text-center">
+              <div className="text-purple-400 font-bold">{Math.round(effects.critChance * 100)}%</div>
+              <div className="text-gray-500 text-xs">暴击率</div>
+            </div>
+            <div className="text-center">
+              <div className="text-pink-400 font-bold">{Math.round(effects.damageReduction * 100)}%</div>
+              <div className="text-gray-500 text-xs">减伤</div>
             </div>
           </div>
         </div>

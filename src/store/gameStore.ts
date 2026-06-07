@@ -126,7 +126,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   
   updateFromEngine: (state) => {
-    const earnedPoints = (window as any).earnedTalentPoints || 0;
     set({
       scene: state.scene,
       player: state.player,
@@ -140,12 +139,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       chests: state.chests,
       combineSlot1: state.combineSlot1,
       combineSlot2: state.combineSlot2,
-      earnedTalentPoints: earnedPoints,
+      earnedTalentPoints: state.earnedTalentPoints || 0,
     });
     
     if (state.scene === 'gameover') {
       set({ saveData: loadSaveData() });
-      (window as any).earnedTalentPoints = 0;
     }
   },
 }));

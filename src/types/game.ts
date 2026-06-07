@@ -182,6 +182,7 @@ export interface GameState {
   combineSlot1: Rune | null;
   combineSlot2: Rune | null;
   camera: Position;
+  earnedTalentPoints: number;
 }
 
 export interface SaveData {
@@ -202,7 +203,11 @@ export type TalentEffectType =
   | 'runeDrop' 
   | 'startRunes'
   | 'fov'
-  | 'goldBonus';
+  | 'goldBonus'
+  | 'hpRegen'
+  | 'damageReduction'
+  | 'critChance'
+  | 'critDamage';
 
 export interface TalentEffect {
   type: TalentEffectType;
