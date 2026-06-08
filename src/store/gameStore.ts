@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import type { GameScene, Rune, Skill, Player, Monster, Chest, SaveData, DailyChallenge } from '../types/game';
-import { loadSaveData, unlockTalent as saveUnlockTalent } from '../game/utils/storage';
+import type { GameScene, Rune, Skill, Player, Monster, Chest, SaveData, DailyChallenge, Equipment, EquipmentSlotType } from '../types/game';
+import { loadSaveData, unlockTalent as saveUnlockTalent, saveEquipment } from '../game/utils/storage';
 import { getTalentCost, canUnlockTalent } from '../data/talents';
+import { upgradeEquipment as upgradeEquip, getUpgradeCost } from '../data/equipment';
 
 interface ToastMessage {
   id: string;
@@ -30,6 +31,7 @@ interface GameStore {
   showChallengeInfo: boolean;
   showBadgePanel: boolean;
   showPetPanel: boolean;
+  showEquipmentPanel: boolean;
   toasts: ToastMessage[];
   draggedRune: Rune | null;
   earnedTalentPoints: number;
@@ -43,6 +45,8 @@ interface GameStore {
   challengeIsFirstCompletion: boolean;
   challengeIsNewBestTime: boolean;
   challengePreviousBestTime: number | null;
+  equipmentInventory: Equipment[];
+  equippedEquipment: Record<EquipmentSlotType, Equipment | null>;
   
   setScene: (scene: GameScene) => void;
   setPlayer: (player: Player) => void;
@@ -61,12 +65,18 @@ interface GameStore {
   setShowChallengeInfo: (show: boolean) => void;
   setShowBadgePanel: (show: boolean) => void;
   setShowPetPanel: (show: boolean) => void;
+  setShowEquipmentPanel: (show: boolean) => void;
   setDraggedRune: (rune: Rune | null) => void;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   removeToast: (id: string) => void;
   refreshSaveData: () => void;
   unlockTalent: (talentId: string) => void;
   updateFromEngine: (state: any) => void;
+  equipItem: (equipment: Equipment) => void;
+  unequipItem: (slotType: EquipmentSlotType) => void;
+  upgradeEquipmentItem: (instanceId: string) => boolean;
+  addEquipmentToInventory: (equipment: Equipment) => void;
+  removeEquipmentFromInventory: (instanceId: string) => void;
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -88,6 +98,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   showChallengeInfo: false,
   showBadgePanel: false,
   showPetPanel: false,
+  showEquipmentPanel: false,
   toasts: [],
   draggedRune: null,
   earnedTalentPoints: 0,
@@ -101,6 +112,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   challengeIsFirstCompletion: false,
   challengeIsNewBestTime: false,
   challengePreviousBestTime: null,
+  equipmentInventory: [],
+  equippedEquipment: {
+    weapon: null,
+    armor: null,
+    accessory: null,
+  },
   
   setScene: (scene) => set({ scene }),
   setPlayer: (player) => set({ player }),
@@ -119,6 +136,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setShowChallengeInfo: (showChallengeInfo) => set({ showChallengeInfo }),
   setShowBadgePanel: (showBadgePanel) => set({ showBadgePanel }),
   setShowPetPanel: (showPetPanel) => set({ showPetPanel }),
+  setShowEquipmentPanel: (showEquipmentPanel) => set({ showEquipmentPanel }),
   setDraggedRune: (draggedRune) => set({ draggedRune }),
   
   addToast: (toast) => {
@@ -182,10 +200,147 @@ export const useGameStore = create<GameStore>((set, get) => ({
       challengeIsFirstCompletion: state.challengeIsFirstCompletion || false,
       challengeIsNewBestTime: state.challengeIsNewBestTime || false,
       challengePreviousBestTime: state.challengePreviousBestTime ?? null,
+      equipmentInventory: state.equipmentInventory || [],
+      equippedEquipment: state.equippedEquipment || {
+        weapon: null,
+        armor: null,
+        accessory: null,
+      },
     });
     
     if (state.scene === 'gameover' || state.scene === 'victory') {
       set({ saveData: loadSaveData() });
     }
+  },
+
+  equipItem: (equipment: Equipment) => {
+    const state = get();
+    const slotType = equipment.type as EquipmentSlotType;
+    const currentEquipped = state.equippedEquipment[slotType];
+    
+    const newEquipped = { ...state.equippedEquipment };
+    const newInventory = [...state.equipmentInventory];
+    
+    if (currentEquipped) {
+      newInventory.push(currentEquipped);
+    }
+    
+    const inventoryIndex = newInventory.findIndex(e => e.instanceId === equipment.instanceId);
+    if (inventoryIndex !== -1) {
+      newInventory.splice(inventoryIndex, 1);
+    }
+    
+    newEquipped[slotType] = equipment;
+    
+    set({
+      equippedEquipment: newEquipped,
+      equipmentInventory: newInventory,
+    });
+    
+    saveEquipment(newInventory, newEquipped);
+    
+    state.addToast({
+      type: 'success',
+      title: `装备了 ${equipment.name}`,
+      color: equipment.color,
+    });
+  },
+
+  unequipItem: (slotType: EquipmentSlotType) => {
+    const state = get();
+    const equipped = state.equippedEquipment[slotType];
+    
+    if (!equipped) return;
+    
+    const newEquipped = { ...state.equippedEquipment };
+    newEquipped[slotType] = null;
+    
+    const newInventory = [...state.equipmentInventory, equipped];
+    
+    set({
+      equippedEquipment: newEquipped,
+      equipmentInventory: newInventory,
+    });
+    
+    saveEquipment(newInventory, newEquipped);
+    
+    state.addToast({
+      type: 'info',
+      title: `卸下了 ${equipped.name}`,
+    });
+  },
+
+  upgradeEquipmentItem: (instanceId: string): boolean => {
+    const state = get();
+    const allEquipment = [
+      ...state.equipmentInventory,
+      ...Object.values(state.equippedEquipment).filter(Boolean) as Equipment[],
+    ];
+    
+    const equipment = allEquipment.find(e => e.instanceId === instanceId);
+    if (!equipment) return false;
+    
+    const cost = getUpgradeCost(equipment);
+    if (state.saveData.talentPoints < cost) return false;
+    
+    const upgraded = upgradeEquip(equipment);
+    if (!upgraded) return false;
+    
+    const newTalentPoints = state.saveData.talentPoints - cost;
+    const newSaveData = { ...state.saveData, talentPoints: newTalentPoints };
+    saveEquipment(undefined, undefined, newSaveData);
+    
+    const isEquipped = Object.values(state.equippedEquipment).some(
+      e => e?.instanceId === instanceId
+    );
+    
+    if (isEquipped) {
+      const slotType = equipment.type as EquipmentSlotType;
+      const newEquipped = { ...state.equippedEquipment };
+      newEquipped[slotType] = upgraded;
+      set({
+        equippedEquipment: newEquipped,
+        saveData: loadSaveData(),
+      });
+      saveEquipment(state.equipmentInventory, newEquipped);
+    } else {
+      const newInventory = state.equipmentInventory.map(e =>
+        e.instanceId === instanceId ? upgraded : e
+      );
+      set({
+        equipmentInventory: newInventory,
+        saveData: loadSaveData(),
+      });
+      saveEquipment(newInventory, state.equippedEquipment);
+    }
+    
+    state.addToast({
+      type: 'success',
+      title: `${equipment.name} 升级到 Lv.${upgraded.level}！`,
+      description: `消耗 ${cost} 天赋点`,
+      color: equipment.color,
+    });
+    
+    return true;
+  },
+
+  addEquipmentToInventory: (equipment: Equipment) => {
+    const state = get();
+    set({
+      equipmentInventory: [...state.equipmentInventory, equipment],
+    });
+    saveEquipment(
+      [...state.equipmentInventory, equipment],
+      state.equippedEquipment
+    );
+  },
+
+  removeEquipmentFromInventory: (instanceId: string) => {
+    const state = get();
+    const newInventory = state.equipmentInventory.filter(
+      e => e.instanceId !== instanceId
+    );
+    set({ equipmentInventory: newInventory });
+    saveEquipment(newInventory, state.equippedEquipment);
   },
 }));

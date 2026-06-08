@@ -16,6 +16,13 @@ const defaultSaveData: SaveData = {
   unlockedPets: ['fire_dragonling'],
   selectedPet: 'fire_dragonling',
   petSkills: {},
+  equipmentInventory: [],
+  equippedEquipment: {
+    weapon: null,
+    armor: null,
+    accessory: null,
+  },
+  discoveredEquipment: [],
 };
 
 export const loadSaveData = (): SaveData => {
@@ -188,4 +195,57 @@ export const setPetSkill = (petType: string, skillId: string): SaveData => {
 export const getPetSkill = (petType: string): string | null => {
   const data = loadSaveData();
   return data.petSkills[petType] || null;
+};
+
+import type { Equipment, EquipmentSlotType } from '../../types/game';
+
+export const saveEquipment = (
+  inventory?: Equipment[],
+  equipped?: Record<EquipmentSlotType, Equipment | null>,
+  newSaveData?: SaveData
+): SaveData => {
+  const data = newSaveData || loadSaveData();
+  
+  if (inventory !== undefined) {
+    data.equipmentInventory = inventory;
+  }
+  
+  if (equipped !== undefined) {
+    const equippedIds: Record<string, string | null> = {};
+    (Object.keys(equipped) as EquipmentSlotType[]).forEach(slot => {
+      equippedIds[slot] = equipped[slot]?.instanceId || null;
+    });
+    data.equippedEquipment = equippedIds;
+  }
+  
+  saveSaveData(data);
+  return data;
+};
+
+export const discoverEquipment = (templateId: string): SaveData => {
+  const data = loadSaveData();
+  if (!data.discoveredEquipment.includes(templateId)) {
+    data.discoveredEquipment.push(templateId);
+    saveSaveData(data);
+  }
+  return data;
+};
+
+export const hasDiscoveredEquipment = (templateId: string): boolean => {
+  const data = loadSaveData();
+  return data.discoveredEquipment.includes(templateId);
+};
+
+export const getEquipmentInventory = (): Equipment[] => {
+  const data = loadSaveData();
+  return data.equipmentInventory || [];
+};
+
+export const getEquippedEquipment = (): Record<string, string | null> => {
+  const data = loadSaveData();
+  return data.equippedEquipment || {
+    weapon: null,
+    armor: null,
+    accessory: null,
+  };
 };

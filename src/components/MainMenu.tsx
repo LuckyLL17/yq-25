@@ -1,6 +1,6 @@
 import { getGameEngine } from '../game/GameEngine';
 import { useGameStore } from '../store/gameStore';
-import { Play, BookOpen, Sparkles, Flame, Snowflake, Zap, Layers, Clock, ZapOff, Target, Lock, TreeDeciduous, Star, Swords, Award, PawPrint } from 'lucide-react';
+import { Play, BookOpen, Sparkles, Flame, Snowflake, Zap, Layers, Clock, ZapOff, Target, Lock, TreeDeciduous, Star, Swords, Award, PawPrint, Sword } from 'lucide-react';
 import { useState } from 'react';
 import { ALL_RUNES, SKILLS } from '../data/runes';
 import type { Rune, Skill } from '../types/game';
@@ -9,7 +9,7 @@ import { getChallengeRecord } from '../game/utils/storage';
 import PetPanel from './PetPanel';
 
 const MainMenu = () => {
-  const { scene, saveData, setShowTalentTree, setShowChallengeInfo, setShowBadgePanel } = useGameStore();
+  const { scene, saveData, setShowTalentTree, setShowChallengeInfo, setShowBadgePanel, setShowEquipmentPanel } = useGameStore();
   const engine = getGameEngine();
   const [showCodex, setShowCodex] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -397,6 +397,19 @@ const MainMenu = () => {
         >
           <Sparkles className="w-5 h-5" />
           符文图鉴
+        </button>
+        
+        <button
+          onClick={() => setShowEquipmentPanel(true)}
+          className="w-full py-3 px-6 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-bold rounded-xl border-4 border-orange-400 shadow-lg transition-all hover:scale-105 flex items-center justify-center gap-2 relative"
+        >
+          <Sword className="w-5 h-5" />
+          装备背包
+          {saveData.equipmentInventory && saveData.equipmentInventory.length > 0 && (
+            <span className="absolute -top-2 -right-2 bg-orange-400 text-orange-900 text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-orange-200">
+              {saveData.equipmentInventory.length}
+            </span>
+          )}
         </button>
         
         <button

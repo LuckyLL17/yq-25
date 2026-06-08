@@ -1,4 +1,4 @@
-import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest, DailyChallenge, Pet } from '../types/game';
+import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType } from '../types/game';
 import { GAME_CONFIG } from '../data/config';
 import { generateDungeon, generateMonsters, generateChests, getPlayerStartPosition, updateFOV, isWalkable } from './utils/dungeon';
 import { getRandomRunes, createSkill, ALL_RUNES, SKILLS } from '../data/runes';
@@ -6,7 +6,8 @@ import { calculateTalentEffects } from '../data/talents';
 import { generateId, distance, clamp, normalize } from './utils/math';
 import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, drawPet, getElementColor, getElementGlowColor } from './utils/pixel';
 import { createPet, PET_SKILLS } from '../data/pets';
-import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, getChallengeRecord, unlockBadge, getStreakDays, getPetSkill } from './utils/storage';
+import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, getChallengeRecord, unlockBadge, getStreakDays, getPetSkill, discoverEquipment } from './utils/storage';
+import { getRandomEquipment, getEquipmentTemplate } from '../data/equipment';
 
 export class GameEngine {
   private canvas: HTMLCanvasElement | null = null;
@@ -19,7 +20,7 @@ export class GameEngine {
   
   public state: GameState;
   public onStateChange: (() => void) | null = null;
-  public onChestOpened: ((rewards: { runes: Rune[] }) => void) | null = null;
+  public onChestOpened: ((rewards: { runes: Rune[]; equipment?: Equipment[] }) => void) | null = null;
   
   constructor() {
     this.state = this.createInitialState();
@@ -79,6 +80,12 @@ export class GameEngine {
       challengeIsFirstCompletion: false,
       challengeIsNewBestTime: false,
       challengePreviousBestTime: null,
+      equipmentInventory: [],
+      equippedEquipment: {
+        weapon: null,
+        armor: null,
+        accessory: null,
+      },
     };
   }
   
@@ -794,6 +801,66 @@ export class GameEngine {
     }
   }
   
+  private getEquipmentStats() {
+    const stats = {
+      attack: 0,
+      defense: 0,
+      maxHp: 0,
+      speed: 0,
+      critChance: 0,
+      critDamage: 0,
+      attackSpeed: 0,
+      goldBonus: 0,
+    };
+    
+    const equipped = this.state.equippedEquipment;
+    const slots: EquipmentSlotType[] = ['weapon', 'armor', 'accessory'];
+    
+    for (const slot of slots) {
+      const equip = equipped[slot];
+      if (equip && equip.durability > 0) {
+        for (const stat of equip.stats) {
+          if (stat.type in stats) {
+            (stats as any)[stat.type] += stat.value;
+          }
+        }
+      }
+    }
+    
+    return stats;
+  }
+  
+  private consumeEquipmentDurability(amount: number = 1) {
+    const slots: EquipmentSlotType[] = ['weapon', 'armor', 'accessory'];
+    let hasBroken = false;
+    
+    for (const slot of slots) {
+      const equip = this.state.equippedEquipment[slot];
+      if (equip && equip.durability > 0) {
+        equip.durability = Math.max(0, equip.durability - amount);
+        if (equip.durability === 0) {
+          hasBroken = true;
+        }
+      }
+    }
+    
+    return hasBroken;
+  }
+  
+  private addEquipmentDrop(level: number) {
+    const dropChance = 0.1 + level * 0.02;
+    
+    if (Math.random() < dropChance) {
+      const equipment = getRandomEquipment(Math.max(1, Math.floor(level / 2)));
+      if (equipment) {
+        this.state.equipmentInventory.push(equipment);
+        discoverEquipment(equipment.templateId);
+        return equipment;
+      }
+    }
+    return null;
+  }
+  
   private updateCamera() {
     if (!this.canvas) return;
     
@@ -835,6 +902,7 @@ export class GameEngine {
   private openChest(chest: Chest) {
     chest.opened = true;
     const rewardRunes: Rune[] = [];
+    const rewardEquipment: Equipment[] = [];
     
     if (!this.state.isChallengeMode) {
       for (const runeId of chest.rewardRuneIds) {
@@ -853,6 +921,32 @@ export class GameEngine {
           );
         }
       }
+      
+      let equipDropChance = 0.3;
+      if (chest.type === 'rare') equipDropChance = 0.6;
+      if (chest.type === 'epic') equipDropChance = 0.9;
+      
+      if (Math.random() < equipDropChance) {
+        const rarity = chest.type === 'epic' ? 'epic' : 
+                       chest.type === 'rare' ? 'rare' : 
+                       Math.random() < 0.7 ? 'common' : 'rare';
+        const equipment = getRandomEquipment(
+          Math.max(1, this.state.currentLevel),
+          rarity as any
+        );
+        if (equipment) {
+          this.state.equipmentInventory.push(equipment);
+          rewardEquipment.push(equipment);
+          discoverEquipment(equipment.templateId);
+        }
+      }
+      
+      const goldAmount = Math.floor(20 + this.state.currentLevel * 10 + Math.random() * 30);
+      const equipmentStats = this.getEquipmentStats();
+      const saveData = loadSaveData();
+      const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
+      const goldBonus = 1 + talentEffects.goldBonus + equipmentStats.goldBonus;
+      this.state.gold += Math.floor(goldAmount * goldBonus);
     }
     
     for (let i = 0; i < 15; i++) {
@@ -864,8 +958,8 @@ export class GameEngine {
       );
     }
     
-    if (this.onChestOpened && rewardRunes.length > 0) {
-      this.onChestOpened({ runes: rewardRunes });
+    if (this.onChestOpened) {
+      this.onChestOpened({ runes: rewardRunes, equipment: rewardEquipment });
     }
     
     this.notifyStateChange();
@@ -926,8 +1020,10 @@ export class GameEngine {
     const fovRadius = GAME_CONFIG.FOV_RADIUS + talentEffects.fov;
     const updatedDungeon = updateFOV(dungeon, startPos, fovRadius);
     
-    const maxHp = GAME_CONFIG.PLAYER_MAX_HP + talentEffects.maxHp;
-    const speed = GAME_CONFIG.PLAYER_SPEED * (1 + talentEffects.speed);
+    const equipmentStats = this.calculateEquipmentStatsFromSave(saveData);
+    
+    const maxHp = GAME_CONFIG.PLAYER_MAX_HP + talentEffects.maxHp + equipmentStats.maxHp;
+    const speed = GAME_CONFIG.PLAYER_SPEED * (1 + talentEffects.speed + equipmentStats.speed);
     
     this.state.scene = 'playing';
     this.state.dungeon = updatedDungeon;
@@ -943,6 +1039,8 @@ export class GameEngine {
     this.state.equippedRunes = equipped;
     this.state.activeSkills = [];
     this.state.earnedTalentPoints = 0;
+    this.state.equipmentInventory = saveData.equipmentInventory || [];
+    this.state.equippedEquipment = this.loadEquippedEquipment(saveData);
     this.state.player = {
       position: { ...startPos },
       hp: maxHp,
@@ -971,6 +1069,61 @@ export class GameEngine {
     this.notifyStateChange();
   }
   
+  private calculateEquipmentStatsFromSave(saveData: any) {
+    const stats = {
+      attack: 0,
+      defense: 0,
+      maxHp: 0,
+      speed: 0,
+      critChance: 0,
+      critDamage: 0,
+      attackSpeed: 0,
+      goldBonus: 0,
+    };
+    
+    const inventory = saveData.equipmentInventory || [];
+    const equippedIds = saveData.equippedEquipment || {};
+    
+    for (const slot of ['weapon', 'armor', 'accessory']) {
+      const equipId = equippedIds[slot];
+      if (equipId) {
+        const equip = inventory.find((e: any) => e.instanceId === equipId);
+        if (equip && equip.durability > 0) {
+          for (const stat of equip.stats) {
+            if (stat.type in stats) {
+              (stats as any)[stat.type] += stat.value;
+            }
+          }
+        }
+      }
+    }
+    
+    return stats;
+  }
+  
+  private loadEquippedEquipment(saveData: any): Record<EquipmentSlotType, Equipment | null> {
+    const result: Record<EquipmentSlotType, Equipment | null> = {
+      weapon: null,
+      armor: null,
+      accessory: null,
+    };
+    
+    const inventory = saveData.equipmentInventory || [];
+    const equippedIds = saveData.equippedEquipment || {};
+    
+    for (const slot of ['weapon', 'armor', 'accessory'] as EquipmentSlotType[]) {
+      const equipId = equippedIds[slot];
+      if (equipId) {
+        const equip = inventory.find((e: any) => e.instanceId === equipId);
+        if (equip) {
+          result[slot] = equip;
+        }
+      }
+    }
+    
+    return result;
+  }
+  
   private gameOver() {
     this.state.scene = 'gameover';
     
@@ -982,9 +1135,16 @@ export class GameEngine {
       
       const saveData = addTalentPoints(talentPointsEarned);
       
+      const equippedIds: Record<string, string | null> = {};
+      (['weapon', 'armor', 'accessory'] as EquipmentSlotType[]).forEach(slot => {
+        equippedIds[slot] = this.state.equippedEquipment[slot]?.instanceId || null;
+      });
+      
       updateSaveData({
         totalKills: saveData.totalKills + this.state.killCount,
         highestLevel: Math.max(this.state.currentLevel, saveData.highestLevel),
+        equipmentInventory: this.state.equipmentInventory,
+        equippedEquipment: equippedIds,
       });
     }
     
@@ -1359,18 +1519,29 @@ export class GameEngine {
   ) {
     const saveData = loadSaveData();
     const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
+    const equipmentStats = this.getEquipmentStats();
     
     let finalDamage = damage;
     let actuallyCrit = isCrit;
     
-    if (!isCrit && talentEffects.critChance > 0) {
-      if (Math.random() < talentEffects.critChance) {
+    const baseDamageMultiplier = 1 + talentEffects.damage + (equipmentStats.attack / 100);
+    finalDamage = Math.floor(finalDamage * baseDamageMultiplier);
+    
+    const totalCritChance = talentEffects.critChance + equipmentStats.critChance;
+    const totalCritDamage = talentEffects.critDamage + equipmentStats.critDamage;
+    
+    if (!isCrit && totalCritChance > 0) {
+      if (Math.random() < totalCritChance) {
         actuallyCrit = true;
-        const critMultiplier = 2 + talentEffects.critDamage;
-        finalDamage = Math.floor(damage * critMultiplier);
+        const critMultiplier = 2 + totalCritDamage;
+        finalDamage = Math.floor(finalDamage * critMultiplier);
       }
     } else if (isCrit) {
-      finalDamage = Math.floor(damage * (2 + talentEffects.critDamage));
+      finalDamage = Math.floor(finalDamage * (2 + totalCritDamage));
+    }
+    
+    if (this.state.player.damageBoostTimer > 0) {
+      finalDamage = Math.floor(finalDamage * (1 + this.state.player.damageBoostPercent / 100));
     }
     
     monster.hp -= finalDamage;
@@ -1416,7 +1587,25 @@ export class GameEngine {
           this.state.runeInventory.push({ ...rune });
           discoverRune(rune.id);
         }
+        
+        const droppedEquipment = this.addEquipmentDrop(this.state.currentLevel);
+        if (droppedEquipment) {
+          for (let i = 0; i < 8; i++) {
+            this.addParticle(
+              monster.position.x,
+              monster.position.y,
+              droppedEquipment.color,
+              'magic'
+            );
+          }
+        }
+        
+        const goldDrop = Math.floor(5 + this.state.currentLevel * 3 + Math.random() * 10);
+        const goldBonus = 1 + talentEffects.goldBonus + equipmentStats.goldBonus;
+        this.state.gold += Math.floor(goldDrop * goldBonus);
       }
+      
+      this.consumeEquipmentDurability(0.5);
       
       for (let i = 0; i < 10; i++) {
         this.addParticle(
@@ -1434,7 +1623,14 @@ export class GameEngine {
     
     const saveData = loadSaveData();
     const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
-    let finalDamage = Math.max(1, Math.floor(damage * (1 - talentEffects.damageReduction)));
+    const equipmentStats = this.getEquipmentStats();
+    
+    let finalDamage = damage;
+    
+    const defenseReduction = Math.min(0.8, equipmentStats.defense / 100);
+    finalDamage = Math.floor(finalDamage * (1 - defenseReduction));
+    
+    finalDamage = Math.max(1, Math.floor(finalDamage * (1 - talentEffects.damageReduction)));
     
     if (this.state.player.shieldTimer > 0) {
       finalDamage = Math.max(1, Math.floor(finalDamage * 0.5));
@@ -1448,6 +1644,8 @@ export class GameEngine {
     }
     
     this.addDamageNumber(this.state.player.position, finalDamage, '#ff4757', false);
+    
+    this.consumeEquipmentDurability(1);
     
     for (let i = 0; i < 8; i++) {
       this.addParticle(

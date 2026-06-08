@@ -6,6 +6,7 @@ import TalentTree from './components/TalentTree';
 import ChallengePanel from './components/ChallengePanel';
 import ChallengeVictoryScreen from './components/ChallengeVictoryScreen';
 import BadgePanel from './components/BadgePanel';
+import EquipmentPanel from './components/EquipmentPanel';
 import { useGameStore } from './store/gameStore';
 import { getGameEngine } from './game/GameEngine';
 
@@ -19,7 +20,8 @@ export default function App() {
       updateFromEngine(state);
     };
     
-    engine.onChestOpened = ({ runes }) => {
+    engine.onChestOpened = ({ runes, equipment }) => {
+      let delay = 0;
       runes.forEach((rune, index) => {
         setTimeout(() => {
           addToast({
@@ -28,8 +30,22 @@ export default function App() {
             description: rune.description,
             color: rune.color,
           });
-        }, index * 500);
+        }, delay);
+        delay += 500;
       });
+      if (equipment) {
+        equipment.forEach((equip, index) => {
+          setTimeout(() => {
+            addToast({
+              type: 'success',
+              title: `获得 ${equip.name}`,
+              description: equip.description,
+              color: equip.color,
+            });
+          }, delay);
+          delay += 600;
+        });
+      }
       refreshSaveData();
     };
     
@@ -50,6 +66,7 @@ export default function App() {
       <ChallengePanel />
       <ChallengeVictoryScreen />
       <BadgePanel />
+      <EquipmentPanel />
       {scene === 'menu' ? <MainMenu /> : <GameCanvas />}
     </div>
   );

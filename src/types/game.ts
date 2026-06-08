@@ -59,6 +59,56 @@ export interface Rune {
   description: string;
 }
 
+export type EquipmentType = 'weapon' | 'armor' | 'accessory';
+export type EquipmentRarity = 'common' | 'rare' | 'epic' | 'legendary';
+export type EquipmentStatType = 
+  | 'attack' 
+  | 'defense' 
+  | 'maxHp' 
+  | 'speed' 
+  | 'critChance' 
+  | 'critDamage'
+  | 'attackSpeed'
+  | 'goldBonus';
+
+export interface EquipmentStat {
+  type: EquipmentStatType;
+  value: number;
+}
+
+export interface EquipmentTemplate {
+  id: string;
+  name: string;
+  type: EquipmentType;
+  rarity: EquipmentRarity;
+  color: string;
+  icon: string;
+  description: string;
+  baseStats: EquipmentStat[];
+  baseDurability: number;
+  basePrice: number;
+  upgradeMultiplier: number;
+}
+
+export interface Equipment {
+  instanceId: string;
+  templateId: string;
+  name: string;
+  type: EquipmentType;
+  rarity: EquipmentRarity;
+  color: string;
+  icon: string;
+  description: string;
+  stats: EquipmentStat[];
+  level: number;
+  maxLevel: number;
+  durability: number;
+  maxDurability: number;
+  price: number;
+}
+
+export type EquipmentSlotType = 'weapon' | 'armor' | 'accessory';
+
 export interface Skill {
   id: string;
   name: string;
@@ -232,6 +282,8 @@ export interface GameState {
   challengeIsFirstCompletion: boolean;
   challengeIsNewBestTime: boolean;
   challengePreviousBestTime: number | null;
+  equipmentInventory: Equipment[];
+  equippedEquipment: Record<EquipmentSlotType, Equipment | null>;
 }
 
 export interface SaveData {
@@ -348,4 +400,7 @@ export interface SaveData {
   unlockedPets: string[];
   selectedPet: string | null;
   petSkills: Record<string, string>;
+  equipmentInventory: Equipment[];
+  equippedEquipment: Record<string, string | null>;
+  discoveredEquipment: string[];
 }
