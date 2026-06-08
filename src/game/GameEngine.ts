@@ -1,10 +1,11 @@
-import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest, DailyChallenge } from '../types/game';
+import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest, DailyChallenge, Pet } from '../types/game';
 import { GAME_CONFIG } from '../data/config';
 import { generateDungeon, generateMonsters, generateChests, getPlayerStartPosition, updateFOV, isWalkable } from './utils/dungeon';
 import { getRandomRunes, createSkill, ALL_RUNES, SKILLS } from '../data/runes';
 import { calculateTalentEffects } from '../data/talents';
 import { generateId, distance, clamp, normalize } from './utils/math';
-import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, getElementColor, getElementGlowColor } from './utils/pixel';
+import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, drawPet, getElementColor, getElementGlowColor } from './utils/pixel';
+import { createPet, getRandomPetType } from '../data/pets';
 import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, getChallengeRecord, unlockBadge, getStreakDays } from './utils/storage';
 
 export class GameEngine {
@@ -50,6 +51,7 @@ export class GameEngine {
       dungeon: null,
       monsters: [],
       chests: [],
+      pet: null,
       projectiles: [],
       particles: [],
       damageNumbers: [],
@@ -116,6 +118,7 @@ export class GameEngine {
   
   private update(deltaTime: number) {
     this.updatePlayer(deltaTime);
+    this.updatePet(deltaTime);
     this.updateMonsters(deltaTime);
     this.updateProjectiles(deltaTime);
     this.updateParticles(deltaTime);
@@ -253,6 +256,282 @@ export class GameEngine {
     }
     
     this.state.monsters = this.state.monsters.filter(m => m.hp > 0);
+  }
+  
+  private updatePet(deltaTime: number) {
+    const pet = this.state.pet;
+    if (!pet || pet.hp <= 0) return;
+    
+    const dt = deltaTime / 1000;
+    const player = this.state.player;
+    
+    const targetX = player.position.x + pet.followOffset.x;
+    const targetY = player.position.y + pet.followOffset.y;
+    const distToTarget = distance(pet.position, { x: targetX, y: targetY });
+    
+    if (distToTarget > 5) {
+      const dir = normalize({
+        x: targetX - pet.position.x,
+        y: targetY - pet.position.y,
+      });
+      
+      const speed = distToTarget > 60 ? pet.speed * 1.5 : pet.speed;
+      const newX = pet.position.x + dir.x * speed * dt;
+      const newY = pet.position.y + dir.y * speed * dt;
+      
+      if (this.state.dungeon && isWalkable(this.state.dungeon, newX, pet.position.y)) {
+        pet.position.x = newX;
+      }
+      if (this.state.dungeon && isWalkable(this.state.dungeon, pet.position.x, newY)) {
+        pet.position.y = newY;
+      }
+      
+      if (dir.x < -0.1) pet.direction = -1;
+      else if (dir.x > 0.1) pet.direction = 1;
+      
+      pet.animTimer += deltaTime;
+      if (pet.animTimer > 120) {
+        pet.animFrame = (pet.animFrame + 1) % 4;
+        pet.animTimer = 0;
+      }
+    } else {
+      pet.animFrame = 0;
+    }
+    
+    let nearestMonster: Monster | null = null;
+    let nearestDist = Infinity;
+    
+    for (const monster of this.state.monsters) {
+      if (monster.hp <= 0) continue;
+      const dist = distance(pet.position, monster.position);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearestMonster = monster;
+      }
+    }
+    
+    if (nearestMonster && nearestDist < pet.attackRange) {
+      if (pet.currentAttackCooldown <= 0) {
+        this.petAttack(pet, nearestMonster);
+        pet.currentAttackCooldown = pet.attackCooldown;
+        pet.isAttacking = true;
+        pet.attackAnimTimer = 200;
+      }
+      
+      if (nearestMonster.position.x < pet.position.x) {
+        pet.direction = -1;
+      } else {
+        pet.direction = 1;
+      }
+    }
+    
+    if (pet.skill.currentCooldown <= 0 && nearestMonster && nearestDist < pet.skill.range) {
+      this.petUseSkill(pet, nearestMonster);
+      pet.skill.currentCooldown = pet.skill.cooldown;
+    }
+    
+    if (pet.currentAttackCooldown > 0) {
+      pet.currentAttackCooldown -= deltaTime;
+    }
+    if (pet.skill.currentCooldown > 0) {
+      pet.skill.currentCooldown -= deltaTime;
+    }
+    
+    if (pet.attackAnimTimer > 0) {
+      pet.attackAnimTimer -= deltaTime;
+      if (pet.attackAnimTimer <= 0) {
+        pet.isAttacking = false;
+      }
+    }
+    
+    for (const monster of this.state.monsters) {
+      if (monster.hp <= 0) continue;
+      const dist = distance(pet.position, monster.position);
+      if (dist < 25 && monster.currentAttackCooldown <= 0) {
+        this.damagePet(pet, monster.damage * 0.5);
+      }
+    }
+  }
+  
+  private petAttack(pet: Pet, target: Monster) {
+    const damage = pet.damage;
+    this.damageMonster(target, damage, this.getPetElement(pet.type), 'pet');
+    
+    for (let i = 0; i < 5; i++) {
+      this.addParticle(
+        target.position.x + (Math.random() - 0.5) * 20,
+        target.position.y + (Math.random() - 0.5) * 20,
+        pet.color,
+        'spark'
+      );
+    }
+    
+    const proj: Projectile = {
+      id: generateId(),
+      position: { ...pet.position },
+      velocity: {
+        x: (target.position.x - pet.position.x) * 5,
+        y: (target.position.y - pet.position.y) * 5,
+      },
+      damage: 0,
+      element: this.getPetElement(pet.type) as any,
+      effect: 'pierce' as any,
+      range: 50,
+      traveled: 0,
+      piercing: true,
+      hitTargets: [],
+      size: 4,
+    };
+    this.state.projectiles.push(proj);
+  }
+  
+  private petUseSkill(pet: Pet, target: Monster) {
+    const skill = pet.skill;
+    
+    switch (pet.type) {
+      case 'fire_dragonling': {
+        for (let i = 0; i < 20; i++) {
+          const angle = (Math.PI * 2 * i) / 20;
+          this.addParticle(
+            target.position.x + Math.cos(angle) * skill.range * 0.3,
+            target.position.y + Math.sin(angle) * skill.range * 0.3,
+            '#ff6b35',
+            'explosion'
+          );
+        }
+        for (const monster of this.state.monsters) {
+          if (monster.hp <= 0) continue;
+          const dist = distance(target.position, monster.position);
+          if (dist < skill.range * 0.5) {
+            this.damageMonster(monster, skill.damage, 'fire', 'spread');
+          }
+        }
+        break;
+      }
+        
+      case 'ice_sprite': {
+        for (let i = 0; i < 25; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const dist = Math.random() * skill.range * 0.5;
+          this.addParticle(
+            pet.position.x + Math.cos(angle) * dist,
+            pet.position.y + Math.sin(angle) * dist,
+            '#4ecdc4',
+            'magic'
+          );
+        }
+        for (const monster of this.state.monsters) {
+          if (monster.hp <= 0) continue;
+          const dist = distance(pet.position, monster.position);
+          if (dist < skill.range * 0.5) {
+            this.damageMonster(monster, skill.damage, 'ice', 'time');
+          }
+        }
+        break;
+      }
+        
+      case 'thunder_bird': {
+        const chainTargets: Monster[] = [target];
+        let lastTarget = target;
+        
+        for (let i = 0; i < 2; i++) {
+          let nextNearest: Monster | null = null;
+          let nextDist = Infinity;
+          
+          for (const monster of this.state.monsters) {
+            if (monster.hp <= 0) continue;
+            if (chainTargets.includes(monster)) continue;
+            const dist = distance(lastTarget.position, monster.position);
+            if (dist < nextDist && dist < 80) {
+              nextDist = dist;
+              nextNearest = monster;
+            }
+          }
+          
+          if (nextNearest) {
+            chainTargets.push(nextNearest);
+            lastTarget = nextNearest;
+          }
+        }
+        
+        for (const monster of chainTargets) {
+          this.damageMonster(monster, skill.damage, 'thunder', 'power');
+          
+          for (let j = 0; j < 8; j++) {
+            this.addParticle(
+              monster.position.x + (Math.random() - 0.5) * 15,
+              monster.position.y + (Math.random() - 0.5) * 15,
+              '#ffe66d',
+              'spark'
+            );
+          }
+        }
+        break;
+      }
+        
+      case 'shadow_cat': {
+        const oldPos = { ...pet.position };
+        pet.position.x = target.position.x + (target.position.x > pet.position.x ? -20 : 20);
+        pet.position.y = target.position.y;
+        
+        this.damageMonster(target, skill.damage, 'thunder', 'power', true);
+        
+        for (let i = 0; i < 12; i++) {
+          this.addParticle(
+            oldPos.x + (Math.random() - 0.5) * 10,
+            oldPos.y + (Math.random() - 0.5) * 10,
+            '#a29bfe',
+            'magic'
+          );
+        }
+        for (let i = 0; i < 12; i++) {
+          this.addParticle(
+            pet.position.x + (Math.random() - 0.5) * 10,
+            pet.position.y + (Math.random() - 0.5) * 10,
+            '#a29bfe',
+            'magic'
+          );
+        }
+        break;
+      }
+    }
+  }
+  
+  private getPetElement(type: string): string {
+    switch (type) {
+      case 'fire_dragonling': return 'fire';
+      case 'ice_sprite': return 'ice';
+      case 'thunder_bird': return 'thunder';
+      case 'shadow_cat': return 'fire';
+      default: return 'fire';
+    }
+  }
+  
+  private damagePet(pet: Pet, damage: number) {
+    pet.hp -= Math.floor(damage);
+    
+    this.addDamageNumber(pet.position, Math.floor(damage), '#ff4757', false);
+    
+    for (let i = 0; i < 6; i++) {
+      this.addParticle(
+        pet.position.x,
+        pet.position.y,
+        pet.color,
+        'spark'
+      );
+    }
+    
+    if (pet.hp <= 0) {
+      pet.hp = 0;
+      for (let i = 0; i < 20; i++) {
+        this.addParticle(
+          pet.position.x,
+          pet.position.y,
+          pet.color,
+          'explosion'
+        );
+      }
+    }
   }
   
   private updateStatusEffects(entity: Monster, deltaTime: number) {
@@ -472,6 +751,13 @@ export class GameEngine {
     this.state.projectiles = [];
     this.state.particles = [];
     
+    if (this.state.pet) {
+      this.state.pet.hp = this.state.pet.maxHp;
+      this.state.pet.position = { x: startPos.x - 30, y: startPos.y + 20 };
+      this.state.pet.skill.currentCooldown = 0;
+      this.state.pet.currentAttackCooldown = 0;
+    }
+    
     updateSaveData({ highestLevel: Math.max(this.state.currentLevel, (window as any).highestLevel || 0) });
     
     this.notifyStateChange();
@@ -529,6 +815,10 @@ export class GameEngine {
       currentAttackCooldown: 0,
       invincible: 0,
     };
+    
+    const petType = getRandomPetType();
+    const pet = createPet(petType, { x: startPos.x - 30, y: startPos.y + 20 });
+    this.state.pet = pet;
     
     this.updateSkillsFromRunes();
     initialRunes.forEach(r => discoverRune(r.id));
@@ -765,6 +1055,10 @@ export class GameEngine {
       currentAttackCooldown: 0,
       invincible: 0,
     };
+    
+    const challengePetType = getRandomPetType();
+    const challengePet = createPet(challengePetType, { x: startPos.x - 30, y: startPos.y + 20 });
+    this.state.pet = challengePet;
     
     this.updateSkillsFromRunes();
     challengeRunes.forEach(r => discoverRune(r.id));
@@ -1231,6 +1525,40 @@ export class GameEngine {
     
     if (player.invincible <= 0 || Math.floor(player.invincible / 50) % 2 === 0) {
       drawFox(ctx, playerScreenX, playerScreenY, player.direction, player.animFrame, 2);
+    }
+    
+    const pet = this.state.pet;
+    if (pet && pet.hp > 0) {
+      const petScreenX = pet.position.x - cam.x;
+      const petScreenY = pet.position.y - cam.y;
+      
+      const petTileX = Math.floor(pet.position.x / tileSize);
+      const petTileY = Math.floor(pet.position.y / tileSize);
+      
+      if (
+        petTileX >= 0 && petTileX < this.state.dungeon.width &&
+        petTileY >= 0 && petTileY < this.state.dungeon.height &&
+        this.state.dungeon.tiles[petTileY][petTileX].visible
+      ) {
+        drawPet(ctx, pet.type, petScreenX, petScreenY, pet.direction, pet.animFrame, pet.isAttacking, 2);
+        
+        const hpPercent = pet.hp / pet.maxHp;
+        ctx.fillStyle = '#2d3436';
+        ctx.fillRect(petScreenX - 12, petScreenY - 20, 24, 4);
+        ctx.fillStyle = hpPercent > 0.5 ? '#7bed9f' : hpPercent > 0.25 ? '#ffeaa7' : '#ff7675';
+        ctx.fillRect(petScreenX - 12, petScreenY - 20, 24 * hpPercent, 4);
+        
+        ctx.fillStyle = pet.color;
+        ctx.fillRect(petScreenX - 10, petScreenY - 26, 4, 4);
+        
+        const skillCooldownPercent = pet.skill.currentCooldown / pet.skill.cooldown;
+        if (skillCooldownPercent > 0) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.fillRect(petScreenX - 8, petScreenY - 26, 16, 3);
+          ctx.fillStyle = pet.color;
+          ctx.fillRect(petScreenX - 8, petScreenY - 26, 16 * (1 - skillCooldownPercent), 3);
+        }
+      }
     }
     
     for (const proj of this.state.projectiles) {

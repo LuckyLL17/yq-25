@@ -78,6 +78,39 @@ export interface Skill {
 export type MonsterType = 'slime' | 'bat' | 'skeleton' | 'ghost' | 'goblin';
 export type AIType = 'passive' | 'aggressive' | 'patrol';
 
+export type PetType = 'fire_dragonling' | 'ice_sprite' | 'thunder_bird' | 'shadow_cat';
+
+export interface PetSkill {
+  name: string;
+  damage: number;
+  cooldown: number;
+  currentCooldown: number;
+  range: number;
+  description: string;
+}
+
+export interface Pet {
+  id: string;
+  name: string;
+  type: PetType;
+  hp: number;
+  maxHp: number;
+  damage: number;
+  speed: number;
+  position: Position;
+  color: string;
+  attackRange: number;
+  attackCooldown: number;
+  currentAttackCooldown: number;
+  skill: PetSkill;
+  direction: number;
+  animFrame: number;
+  animTimer: number;
+  isAttacking: boolean;
+  attackAnimTimer: number;
+  followOffset: { x: number; y: number };
+}
+
 export interface StatusEffect {
   type: 'burn' | 'frozen' | 'paralyze' | 'slow';
   duration: number;
@@ -169,6 +202,7 @@ export interface GameState {
   dungeon: Dungeon | null;
   monsters: Monster[];
   chests: Chest[];
+  pet: Pet | null;
   projectiles: Projectile[];
   particles: Particle[];
   damageNumbers: DamageNumber[];

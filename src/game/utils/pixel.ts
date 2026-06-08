@@ -245,6 +245,149 @@ export const drawStairs = (
   ctx.fillRect(px + 7 * s, py + 3 * s, 2 * s, 2 * s);
 };
 
+export const drawPet = (
+  ctx: CanvasRenderingContext2D,
+  type: string,
+  x: number,
+  y: number,
+  direction: number,
+  animFrame: number,
+  isAttacking: boolean,
+  scale: number = 2
+) => {
+  const s = scale;
+  const px = Math.floor(x - 8 * s);
+  const py = Math.floor(y - 8 * s);
+  const bounce = animFrame % 2 === 0 ? 0 : -s;
+
+  switch (type) {
+    case 'fire_dragonling': {
+      ctx.fillStyle = '#ff6b35';
+      ctx.fillRect(px + 4 * s, py + 5 * s + bounce, 8 * s, 7 * s);
+      ctx.fillRect(px + 3 * s, py + 2 * s + bounce, 10 * s, 5 * s);
+      ctx.fillStyle = '#ff8c42';
+      ctx.fillRect(px + 4 * s, py + 3 * s + bounce, 8 * s, 3 * s);
+      ctx.fillStyle = '#d63031';
+      ctx.fillRect(px + 2 * s, py + 4 * s + bounce, 2 * s, 2 * s);
+      ctx.fillRect(px + 12 * s, py + 4 * s + bounce, 2 * s, 2 * s);
+      const eyeX = direction < 0 ? px + 4 * s : px + 10 * s;
+      ctx.fillStyle = '#ffeaa7';
+      ctx.fillRect(eyeX, py + 4 * s + bounce, 2 * s, 2 * s);
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(eyeX + (direction < 0 ? 0 : s), py + 4 * s + bounce, s, s);
+      ctx.fillStyle = '#ff6b35';
+      const tailX = direction < 0 ? px + 12 * s : px + 1 * s;
+      ctx.fillRect(tailX, py + 7 * s + bounce, 3 * s, 3 * s);
+      if (isAttacking) {
+        ctx.fillStyle = '#ffe66d';
+        const fireX = direction < 0 ? px - 2 * s : px + 14 * s;
+        ctx.fillRect(fireX, py + 5 * s + bounce, 2 * s, 2 * s);
+        ctx.fillStyle = '#ff6b35';
+        ctx.fillRect(fireX + (direction < 0 ? -s : s), py + 6 * s + bounce, s, s);
+      }
+      ctx.fillStyle = '#ff6b35';
+      ctx.fillRect(px + 5 * s, py + 12 * s, 2 * s, 2 * s);
+      ctx.fillRect(px + 9 * s, py + 12 * s, 2 * s, 2 * s);
+      break;
+    }
+
+    case 'ice_sprite': {
+      ctx.fillStyle = 'rgba(78, 205, 196, 0.7)';
+      ctx.beginPath();
+      ctx.arc(x, y + bounce, 6 * s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(116, 185, 255, 0.5)';
+      ctx.beginPath();
+      ctx.arc(x, y + bounce, 8 * s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(px + 5 * s, py + 4 * s + bounce, 2 * s, 2 * s);
+      ctx.fillRect(px + 9 * s, py + 4 * s + bounce, 2 * s, 2 * s);
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(px + 6 * s, py + 5 * s + bounce, s, s);
+      ctx.fillRect(px + 10 * s, py + 5 * s + bounce, s, s);
+      ctx.fillStyle = '#4ecdc4';
+      const wingFlap = animFrame % 2 === 0 ? 0 : -2 * s;
+      ctx.fillRect(px + 1 * s, py + 5 * s + wingFlap + bounce, 3 * s, 4 * s);
+      ctx.fillRect(px + 12 * s, py + 5 * s + wingFlap + bounce, 3 * s, 4 * s);
+      if (isAttacking) {
+        ctx.fillStyle = '#a8e6cf';
+        for (let i = 0; i < 3; i++) {
+          const sparkleX = px + (4 + i * 3) * s;
+          const sparkleY = py + (10 + (i % 2) * 2) * s + bounce;
+          ctx.fillRect(sparkleX, sparkleY, s, s);
+        }
+      }
+      break;
+    }
+
+    case 'thunder_bird': {
+      ctx.fillStyle = '#ffe66d';
+      ctx.fillRect(px + 4 * s, py + 4 * s + bounce, 8 * s, 6 * s);
+      ctx.fillRect(px + 5 * s, py + 2 * s + bounce, 6 * s, 4 * s);
+      ctx.fillStyle = '#fdcb6e';
+      ctx.fillRect(px + 3 * s, py + 3 * s + bounce, 2 * s, 3 * s);
+      ctx.fillRect(px + 11 * s, py + 3 * s + bounce, 2 * s, 3 * s);
+      const birdEyeX = direction < 0 ? px + 5 * s : px + 9 * s;
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(birdEyeX, py + 4 * s + bounce, s, s);
+      ctx.fillStyle = '#e17055';
+      const beakX = direction < 0 ? px + 2 * s : px + 13 * s;
+      ctx.fillRect(beakX, py + 5 * s + bounce, 2 * s, s);
+      ctx.fillStyle = '#ffe66d';
+      const wingOffset = animFrame % 2 === 0 ? 0 : -3 * s;
+      ctx.fillRect(px + 1 * s, py + 6 * s + wingOffset + bounce, 3 * s, 4 * s);
+      ctx.fillRect(px + 12 * s, py + 6 * s + wingOffset + bounce, 3 * s, 4 * s);
+      ctx.fillStyle = '#fdcb6e';
+      ctx.fillRect(px + 6 * s, py + 10 * s + bounce, s, 3 * s);
+      ctx.fillRect(px + 9 * s, py + 10 * s + bounce, s, 3 * s);
+      if (isAttacking) {
+        ctx.fillStyle = '#ffffff';
+        const lightningX = direction < 0 ? px - 2 * s : px + 15 * s;
+        ctx.fillRect(lightningX, py + 3 * s + bounce, s, 3 * s);
+        ctx.fillRect(lightningX + (direction < 0 ? -s : s), py + 5 * s + bounce, s, 2 * s);
+      }
+      break;
+    }
+
+    case 'shadow_cat': {
+      ctx.fillStyle = '#6c5ce7';
+      ctx.fillRect(px + 3 * s, py + 5 * s + bounce, 10 * s, 6 * s);
+      ctx.fillRect(px + 4 * s, py + 2 * s + bounce, 8 * s, 5 * s);
+      ctx.fillStyle = '#a29bfe';
+      ctx.fillRect(px + 5 * s, py + 4 * s + bounce, 6 * s, 2 * s);
+      ctx.fillStyle = '#6c5ce7';
+      ctx.fillRect(px + 3 * s, py + 1 * s + bounce, 2 * s, 3 * s);
+      ctx.fillRect(px + 11 * s, py + 1 * s + bounce, 2 * s, 3 * s);
+      const catEyeX = direction < 0 ? px + 5 * s : px + 9 * s;
+      ctx.fillStyle = '#ffeaa7';
+      ctx.fillRect(catEyeX, py + 4 * s + bounce, 2 * s, s);
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(catEyeX + s, py + 4 * s + bounce, s, s);
+      ctx.fillStyle = '#a29bfe';
+      const catTailDir = direction < 0 ? 1 : -1;
+      const catTailX = direction < 0 ? px + 13 * s : px + 0 * s;
+      ctx.fillRect(catTailX, py + 6 * s + bounce, s, 4 * s);
+      ctx.fillRect(catTailX + catTailDir * s, py + 5 * s + bounce, s, s);
+      ctx.fillStyle = '#6c5ce7';
+      const legBounce = animFrame % 2 === 0 ? 0 : s;
+      ctx.fillRect(px + 4 * s, py + 11 * s, 2 * s, 3 * s - legBounce / 2);
+      ctx.fillRect(px + 10 * s, py + 11 * s, 2 * s, 3 * s - legBounce / 2);
+      if (isAttacking) {
+        ctx.fillStyle = '#a29bfe';
+        const clawX = direction < 0 ? px - 1 * s : px + 14 * s;
+        ctx.fillRect(clawX, py + 5 * s + bounce, s, 2 * s);
+        ctx.fillRect(clawX, py + 8 * s + bounce, s, 2 * s);
+      }
+      break;
+    }
+
+    default:
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(px + 4 * s, py + 4 * s, 8 * s, 8 * s);
+  }
+};
+
 export const drawRuneIcon = (
   ctx: CanvasRenderingContext2D,
   x: number,
