@@ -28,6 +28,7 @@ interface GameStore {
   showRunePanel: boolean;
   showTalentTree: boolean;
   showChallengeInfo: boolean;
+  showBadgePanel: boolean;
   toasts: ToastMessage[];
   draggedRune: Rune | null;
   earnedTalentPoints: number;
@@ -37,6 +38,10 @@ interface GameStore {
   challengeTimeSpent: number;
   challengeCompleted: boolean;
   challengeFailed: boolean;
+  challengeDamageTaken: number;
+  challengeIsFirstCompletion: boolean;
+  challengeIsNewBestTime: boolean;
+  challengePreviousBestTime: number | null;
   
   setScene: (scene: GameScene) => void;
   setPlayer: (player: Player) => void;
@@ -53,6 +58,7 @@ interface GameStore {
   setShowRunePanel: (show: boolean) => void;
   setShowTalentTree: (show: boolean) => void;
   setShowChallengeInfo: (show: boolean) => void;
+  setShowBadgePanel: (show: boolean) => void;
   setDraggedRune: (rune: Rune | null) => void;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   removeToast: (id: string) => void;
@@ -78,6 +84,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   showRunePanel: false,
   showTalentTree: false,
   showChallengeInfo: false,
+  showBadgePanel: false,
   toasts: [],
   draggedRune: null,
   earnedTalentPoints: 0,
@@ -87,6 +94,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   challengeTimeSpent: 0,
   challengeCompleted: false,
   challengeFailed: false,
+  challengeDamageTaken: 0,
+  challengeIsFirstCompletion: false,
+  challengeIsNewBestTime: false,
+  challengePreviousBestTime: null,
   
   setScene: (scene) => set({ scene }),
   setPlayer: (player) => set({ player }),
@@ -103,6 +114,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setShowRunePanel: (showRunePanel) => set({ showRunePanel }),
   setShowTalentTree: (showTalentTree) => set({ showTalentTree }),
   setShowChallengeInfo: (showChallengeInfo) => set({ showChallengeInfo }),
+  setShowBadgePanel: (showBadgePanel) => set({ showBadgePanel }),
   setDraggedRune: (draggedRune) => set({ draggedRune }),
   
   addToast: (toast) => {
@@ -162,6 +174,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       challengeTimeSpent: state.challengeTimeSpent || 0,
       challengeCompleted: state.challengeCompleted || false,
       challengeFailed: state.challengeFailed || false,
+      challengeDamageTaken: state.challengeDamageTaken || 0,
+      challengeIsFirstCompletion: state.challengeIsFirstCompletion || false,
+      challengeIsNewBestTime: state.challengeIsNewBestTime || false,
+      challengePreviousBestTime: state.challengePreviousBestTime ?? null,
     });
     
     if (state.scene === 'gameover' || state.scene === 'victory') {

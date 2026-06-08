@@ -5,6 +5,7 @@ import ToastContainer from './components/ToastContainer';
 import TalentTree from './components/TalentTree';
 import ChallengePanel from './components/ChallengePanel';
 import ChallengeVictoryScreen from './components/ChallengeVictoryScreen';
+import BadgePanel from './components/BadgePanel';
 import { useGameStore } from './store/gameStore';
 import { getGameEngine } from './game/GameEngine';
 
@@ -48,6 +49,7 @@ export default function App() {
       <TalentTree />
       <ChallengePanel />
       <ChallengeVictoryScreen />
+      <BadgePanel />
       {scene === 'menu' ? <MainMenu /> : <GameCanvas />}
     </div>
   );

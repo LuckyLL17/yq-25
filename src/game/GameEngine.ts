@@ -5,7 +5,7 @@ import { getRandomRunes, createSkill, ALL_RUNES, SKILLS } from '../data/runes';
 import { calculateTalentEffects } from '../data/talents';
 import { generateId, distance, clamp, normalize } from './utils/math';
 import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, getElementColor, getElementGlowColor } from './utils/pixel';
-import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, unlockBadge, getStreakDays } from './utils/storage';
+import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, getChallengeRecord, unlockBadge, getStreakDays } from './utils/storage';
 
 export class GameEngine {
   private canvas: HTMLCanvasElement | null = null;
@@ -71,6 +71,9 @@ export class GameEngine {
       challengeCompleted: false,
       challengeFailed: false,
       challengeDamageTaken: 0,
+      challengeIsFirstCompletion: false,
+      challengeIsNewBestTime: false,
+      challengePreviousBestTime: null,
     };
   }
   
@@ -600,13 +603,30 @@ export class GameEngine {
     const noDamage = this.state.challengeDamageTaken === 0;
     const fastComplete = timeSpent <= 60;
     
-    const basePoints = challenge.talentPointsReward;
-    const timeBonus = Math.max(0, Math.floor((challenge.timeLimit - timeSpent) / 10));
-    const totalPoints = basePoints + timeBonus;
+    const existingRecord = getChallengeRecord(challenge.date);
+    const isFirstCompletion = !existingRecord?.completed;
+    const previousBestTime = existingRecord?.bestTime ?? null;
+    const isNewBestTime = previousBestTime === null || timeSpent < previousBestTime;
     
-    this.state.earnedTalentPoints = totalPoints;
+    this.state.challengeIsFirstCompletion = isFirstCompletion;
+    this.state.challengeIsNewBestTime = isNewBestTime;
+    this.state.challengePreviousBestTime = previousBestTime;
     
-    const saveData = addTalentPoints(totalPoints);
+    let totalPoints = 0;
+    let saveData = loadSaveData();
+    
+    if (isFirstCompletion) {
+      const basePoints = challenge.talentPointsReward;
+      const timeBonus = Math.max(0, Math.floor((challenge.timeLimit - timeSpent) / 10));
+      totalPoints = basePoints + timeBonus;
+      
+      this.state.earnedTalentPoints = totalPoints;
+      saveData = addTalentPoints(totalPoints);
+    } else {
+      this.state.earnedTalentPoints = 0;
+    }
+    
+    const newBestTime = isNewBestTime ? timeSpent : previousBestTime!;
     
     saveChallengeRecord(challenge.date, {
       date: challenge.date,
@@ -614,38 +634,40 @@ export class GameEngine {
       timeSpent,
       killCount: this.state.killCount,
       chestsOpened: this.state.chests.filter(c => c.opened).length,
-      bestTime: timeSpent,
+      bestTime: newBestTime,
     });
     
-    unlockBadge('badge_first_challenge');
-    
-    if (fastComplete) {
-      unlockBadge('badge_speed_runner');
-    }
-    
-    if (noDamage) {
-      unlockBadge('badge_perfect');
-    }
-    
-    if (challenge.goalType === 'both' || challenge.goalType === 'open_all_chests') {
-      unlockBadge('badge_collector');
-    }
-    
-    if (challenge.goalType === 'both' || challenge.goalType === 'kill_all') {
-      unlockBadge('badge_slayer');
-    }
-    
-    const streak = getStreakDays();
-    if (streak >= 7) {
-      unlockBadge('badge_week_streak');
-    }
-    
-    if (saveData.totalChallengesCompleted >= 30) {
-      unlockBadge('badge_master');
-    }
-    
-    if (challenge.badgeReward) {
-      unlockBadge(challenge.badgeReward);
+    if (isFirstCompletion) {
+      unlockBadge('badge_first_challenge');
+      
+      if (fastComplete) {
+        unlockBadge('badge_speed_runner');
+      }
+      
+      if (noDamage) {
+        unlockBadge('badge_perfect');
+      }
+      
+      if (challenge.goalType === 'both' || challenge.goalType === 'open_all_chests') {
+        unlockBadge('badge_collector');
+      }
+      
+      if (challenge.goalType === 'both' || challenge.goalType === 'kill_all') {
+        unlockBadge('badge_slayer');
+      }
+      
+      const streak = getStreakDays();
+      if (streak >= 7) {
+        unlockBadge('badge_week_streak');
+      }
+      
+      if (saveData.totalChallengesCompleted >= 30) {
+        unlockBadge('badge_master');
+      }
+      
+      if (challenge.badgeReward) {
+        unlockBadge(challenge.badgeReward);
+      }
     }
     
     updateSaveData({
@@ -669,6 +691,13 @@ export class GameEngine {
       chestsOpened: this.state.chests.filter(c => c.opened).length,
     });
     
+    this.notifyStateChange();
+  }
+  
+  public goToMenu() {
+    this.state.scene = 'menu';
+    this.state.isChallengeMode = false;
+    this.state.challenge = null;
     this.notifyStateChange();
   }
   

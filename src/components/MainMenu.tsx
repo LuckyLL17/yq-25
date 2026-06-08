@@ -1,6 +1,6 @@
 import { getGameEngine } from '../game/GameEngine';
 import { useGameStore } from '../store/gameStore';
-import { Play, BookOpen, Sparkles, Flame, Snowflake, Zap, Layers, Clock, ZapOff, Target, Lock, TreeDeciduous, Star, Swords } from 'lucide-react';
+import { Play, BookOpen, Sparkles, Flame, Snowflake, Zap, Layers, Clock, ZapOff, Target, Lock, TreeDeciduous, Star, Swords, Award } from 'lucide-react';
 import { useState } from 'react';
 import { ALL_RUNES, SKILLS } from '../data/runes';
 import type { Rune, Skill } from '../types/game';
@@ -8,7 +8,7 @@ import { getTodaysChallenge, formatTime, getGoalDescription } from '../data/chal
 import { getChallengeRecord } from '../game/utils/storage';
 
 const MainMenu = () => {
-  const { scene, saveData, setShowTalentTree, setShowChallengeInfo } = useGameStore();
+  const { scene, saveData, setShowTalentTree, setShowChallengeInfo, setShowBadgePanel } = useGameStore();
   const engine = getGameEngine();
   const [showCodex, setShowCodex] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -391,6 +391,19 @@ const MainMenu = () => {
         >
           <Sparkles className="w-5 h-5" />
           符文图鉴
+        </button>
+        
+        <button
+          onClick={() => setShowBadgePanel(true)}
+          className="w-full py-3 px-6 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold rounded-xl border-4 border-yellow-400 shadow-lg transition-all hover:scale-105 flex items-center justify-center gap-2 relative"
+        >
+          <Award className="w-5 h-5" />
+          徽章收藏
+          {saveData.badges && saveData.badges.length > 0 && (
+            <span className="absolute -top-2 -right-2 bg-yellow-500 text-yellow-900 text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-yellow-300">
+              {saveData.badges.length}
+            </span>
+          )}
         </button>
       </div>
       

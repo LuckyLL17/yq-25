@@ -1,12 +1,13 @@
 import { getGameEngine } from '../game/GameEngine';
 import { useGameStore } from '../store/gameStore';
-import { Trophy, Clock, RefreshCw, Home, Star, Sparkles, Swords, Package, Award } from 'lucide-react';
+import { Trophy, Clock, RefreshCw, Home, Star, Sparkles, Swords, Package, Award, Crown } from 'lucide-react';
 import { formatTime } from '../data/challenges';
 import { getStreakDays } from '../game/utils/storage';
-import { BADGES, getBadgeById } from '../data/badges';
+import { BADGES } from '../data/badges';
+import { useMemo } from 'react';
 
 const ChallengeVictoryScreen = () => {
-  const { scene, killCount, chests, earnedTalentPoints, challengeTimeSpent, challenge, challengeDamageTaken, saveData } = useGameStore();
+  const { scene, killCount, chests, earnedTalentPoints, challengeTimeSpent, challenge, challengeDamageTaken, saveData, challengeIsFirstCompletion, challengeIsNewBestTime, challengePreviousBestTime } = useGameStore();
   const engine = getGameEngine();
   
   if (scene !== 'victory') return null;
@@ -23,24 +24,24 @@ const ChallengeVictoryScreen = () => {
   };
   
   const handleMainMenu = () => {
-    const state = engine.getState();
-    state.scene = 'menu';
-    state.isChallengeMode = false;
-    state.challenge = null;
+    engine.goToMenu();
   };
   
-  const earnedBadges = BADGES.filter(badge => {
-    if (badge.id === 'badge_first_challenge') return true;
-    if (badge.id === 'badge_speed_runner' && fastComplete) return true;
-    if (badge.id === 'badge_perfect' && noDamage) return true;
-    if (badge.id === 'badge_collector' && challenge?.goalType !== 'kill_all') return true;
-    if (badge.id === 'badge_slayer' && challenge?.goalType !== 'open_all_chests') return true;
-    if (badge.id === 'badge_week_streak' && streak >= 7) return true;
-    return false;
-  }).filter(b => {
-    const wasUnlocked = saveData.badges.includes(b.id);
-    return !wasUnlocked;
-  });
+  const earnedBadges = useMemo(() => {
+    if (!challengeIsFirstCompletion) return [];
+    return BADGES.filter(badge => {
+      if (badge.id === 'badge_first_challenge') return true;
+      if (badge.id === 'badge_speed_runner' && fastComplete) return true;
+      if (badge.id === 'badge_perfect' && noDamage) return true;
+      if (badge.id === 'badge_collector' && challenge?.goalType !== 'kill_all') return true;
+      if (badge.id === 'badge_slayer' && challenge?.goalType !== 'open_all_chests') return true;
+      if (badge.id === 'badge_week_streak' && streak >= 7) return true;
+      return false;
+    }).filter(b => {
+      const wasUnlocked = saveData.badges.includes(b.id);
+      return !wasUnlocked;
+    });
+  }, [challengeIsFirstCompletion, fastComplete, noDamage, challenge?.goalType, streak, saveData.badges]);
   
   return (
     <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/80">
@@ -48,7 +49,18 @@ const ChallengeVictoryScreen = () => {
         <div className="mb-6">
           <Trophy className="w-20 h-20 text-yellow-400 mx-auto mb-4 animate-bounce" />
           <h1 className="text-4xl font-bold text-yellow-400 mb-2">挑战成功！</h1>
-          <p className="text-gray-400">恭喜你完成了今日挑战</p>
+          <p className="text-gray-400">
+            {challengeIsFirstCompletion ? '恭喜你完成了今日挑战' : '再次完成今日挑战'}
+          </p>
+          {challengeIsNewBestTime && challengePreviousBestTime !== null && (
+            <div className="mt-3 bg-gradient-to-r from-cyan-900/50 to-blue-900/50 border border-cyan-400 rounded-lg px-4 py-2 inline-flex items-center gap-2">
+              <Crown className="w-5 h-5 text-cyan-400" />
+              <span className="text-cyan-300 font-bold">新纪录！</span>
+              <span className="text-cyan-200/70 text-sm">
+                比之前快 {formatTime(challengePreviousBestTime - challengeTimeSpent)}
+              </span>
+            </div>
+          )}
         </div>
         
         <div className="bg-gray-800 rounded-lg p-6 mb-6">

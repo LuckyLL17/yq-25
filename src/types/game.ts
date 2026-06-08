@@ -190,6 +190,9 @@ export interface GameState {
   challengeCompleted: boolean;
   challengeFailed: boolean;
   challengeDamageTaken: number;
+  challengeIsFirstCompletion: boolean;
+  challengeIsNewBestTime: boolean;
+  challengePreviousBestTime: number | null;
 }
 
 export interface SaveData {
