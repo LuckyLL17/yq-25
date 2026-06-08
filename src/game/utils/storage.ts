@@ -13,6 +13,8 @@ const defaultSaveData: SaveData = {
   badges: [],
   challengeHistory: {},
   totalChallengesCompleted: 0,
+  unlockedPets: ['fire_dragonling'],
+  selectedPet: 'fire_dragonling',
 };
 
 export const loadSaveData = (): SaveData => {
@@ -142,4 +144,32 @@ export const getStreakDays = (): number => {
   }
   
   return streak;
+};
+
+export const unlockPet = (petType: string): SaveData => {
+  const data = loadSaveData();
+  if (!data.unlockedPets.includes(petType)) {
+    data.unlockedPets.push(petType);
+    saveSaveData(data);
+  }
+  return data;
+};
+
+export const selectPet = (petType: string): SaveData => {
+  const data = loadSaveData();
+  if (data.unlockedPets.includes(petType)) {
+    data.selectedPet = petType;
+    saveSaveData(data);
+  }
+  return data;
+};
+
+export const hasPet = (petType: string): boolean => {
+  const data = loadSaveData();
+  return data.unlockedPets.includes(petType);
+};
+
+export const getSelectedPet = (): string | null => {
+  const data = loadSaveData();
+  return data.selectedPet;
 };

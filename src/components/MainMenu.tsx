@@ -1,17 +1,19 @@
 import { getGameEngine } from '../game/GameEngine';
 import { useGameStore } from '../store/gameStore';
-import { Play, BookOpen, Sparkles, Flame, Snowflake, Zap, Layers, Clock, ZapOff, Target, Lock, TreeDeciduous, Star, Swords, Award } from 'lucide-react';
+import { Play, BookOpen, Sparkles, Flame, Snowflake, Zap, Layers, Clock, ZapOff, Target, Lock, TreeDeciduous, Star, Swords, Award, PawPrint } from 'lucide-react';
 import { useState } from 'react';
 import { ALL_RUNES, SKILLS } from '../data/runes';
 import type { Rune, Skill } from '../types/game';
 import { getTodaysChallenge, formatTime, getGoalDescription } from '../data/challenges';
 import { getChallengeRecord } from '../game/utils/storage';
+import PetPanel from './PetPanel';
 
 const MainMenu = () => {
   const { scene, saveData, setShowTalentTree, setShowChallengeInfo, setShowBadgePanel } = useGameStore();
   const engine = getGameEngine();
   const [showCodex, setShowCodex] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showPetPanel, setShowPetPanel] = useState(false);
   
   const todaysChallenge = getTodaysChallenge();
   const todaysRecord = getChallengeRecord(todaysChallenge.date);
@@ -48,6 +50,10 @@ const MainMenu = () => {
   const elementRunes = ALL_RUNES.filter(r => r.type === 'element');
   const effectRunes = ALL_RUNES.filter(r => r.type === 'effect');
   const allSkills = Object.values(SKILLS);
+
+  if (showPetPanel) {
+    return <PetPanel onClose={() => setShowPetPanel(false)} />;
+  }
 
   if (showCodex) {
     return (
@@ -391,6 +397,19 @@ const MainMenu = () => {
         >
           <Sparkles className="w-5 h-5" />
           符文图鉴
+        </button>
+        
+        <button
+          onClick={() => setShowPetPanel(true)}
+          className="w-full py-3 px-6 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-400 hover:to-rose-400 text-white font-bold rounded-xl border-4 border-pink-400 shadow-lg transition-all hover:scale-105 flex items-center justify-center gap-2 relative"
+        >
+          <PawPrint className="w-5 h-5" />
+          宠物伙伴
+          {saveData.unlockedPets && saveData.unlockedPets.length > 0 && (
+            <span className="absolute -top-2 -right-2 bg-pink-400 text-pink-900 text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-pink-200">
+              {saveData.unlockedPets.length}
+            </span>
+          )}
         </button>
         
         <button

@@ -237,6 +237,8 @@ export interface SaveData {
   highScore: number;
   talentPoints: number;
   unlockedTalents: Record<string, number>;
+  unlockedPets: string[];
+  selectedPet: string | null;
 }
 
 export type TalentEffectType = 
@@ -337,4 +339,6 @@ export interface SaveData {
   challengeHistory: Record<string, ChallengeRecord>;
   bestChallengeTime?: number;
   totalChallengesCompleted: number;
+  unlockedPets: string[];
+  selectedPet: string | null;
 }

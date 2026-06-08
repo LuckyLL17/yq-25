@@ -5,7 +5,7 @@ import { getRandomRunes, createSkill, ALL_RUNES, SKILLS } from '../data/runes';
 import { calculateTalentEffects } from '../data/talents';
 import { generateId, distance, clamp, normalize } from './utils/math';
 import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, drawPet, getElementColor, getElementGlowColor } from './utils/pixel';
-import { createPet, getRandomPetType } from '../data/pets';
+import { createPet } from '../data/pets';
 import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, getChallengeRecord, unlockBadge, getStreakDays } from './utils/storage';
 
 export class GameEngine {
@@ -275,24 +275,98 @@ export class GameEngine {
         y: targetY - pet.position.y,
       });
       
-      const speed = distToTarget > 60 ? pet.speed * 1.5 : pet.speed;
-      const newX = pet.position.x + dir.x * speed * dt;
-      const newY = pet.position.y + dir.y * speed * dt;
+      const speed = distToTarget > 60 ? pet.speed * 2 : pet.speed;
+      let moved = false;
       
-      if (this.state.dungeon && isWalkable(this.state.dungeon, newX, pet.position.y)) {
-        pet.position.x = newX;
-      }
-      if (this.state.dungeon && isWalkable(this.state.dungeon, pet.position.x, newY)) {
-        pet.position.y = newY;
+      if (this.state.dungeon) {
+        const newX = pet.position.x + dir.x * speed * dt;
+        const newY = pet.position.y + dir.y * speed * dt;
+        
+        const canMoveX = isWalkable(this.state.dungeon, newX, pet.position.y);
+        const canMoveY = isWalkable(this.state.dungeon, pet.position.x, newY);
+        
+        if (canMoveX) {
+          pet.position.x = newX;
+          moved = true;
+        }
+        if (canMoveY) {
+          pet.position.y = newY;
+          moved = true;
+        }
+        
+        if (!canMoveX && !canMoveY && distToTarget > 100) {
+          const playerTileX = Math.floor(player.position.x / GAME_CONFIG.TILE_SIZE);
+          const playerTileY = Math.floor(player.position.y / GAME_CONFIG.TILE_SIZE);
+          
+          const offsets = [
+            { x: -1, y: 0 }, { x: 1, y: 0 },
+            { x: 0, y: -1 }, { x: 0, y: 1 },
+            { x: -1, y: -1 }, { x: 1, y: -1 },
+            { x: -1, y: 1 }, { x: 1, y: 1 },
+          ];
+          
+          for (const offset of offsets) {
+            const checkX = playerTileX + offset.x;
+            const checkY = playerTileY + offset.y;
+            
+            if (
+              checkX >= 0 && checkX < this.state.dungeon.width &&
+              checkY >= 0 && checkY < this.state.dungeon.height &&
+              this.state.dungeon.tiles[checkY][checkX].type === 'floor'
+            ) {
+              const oldPos = { ...pet.position };
+              pet.position.x = (checkX + 0.5) * GAME_CONFIG.TILE_SIZE;
+              pet.position.y = (checkY + 0.5) * GAME_CONFIG.TILE_SIZE;
+              
+              for (let i = 0; i < 10; i++) {
+                this.addParticle(
+                  oldPos.x + (Math.random() - 0.5) * 20,
+                  oldPos.y + (Math.random() - 0.5) * 20,
+                  pet.color,
+                  'magic'
+                );
+                this.addParticle(
+                  pet.position.x + (Math.random() - 0.5) * 20,
+                  pet.position.y + (Math.random() - 0.5) * 20,
+                  pet.color,
+                  'magic'
+                );
+              }
+              moved = true;
+              break;
+            }
+          }
+        } else if (!canMoveX || !canMoveY) {
+          const altDir = { x: 0, y: 0 };
+          if (Math.abs(dir.x) > Math.abs(dir.y)) {
+            altDir.y = dir.y > 0 ? 1 : -1;
+          } else {
+            altDir.x = dir.x > 0 ? 1 : -1;
+          }
+          
+          const altNewX = pet.position.x + altDir.x * speed * 0.7 * dt;
+          const altNewY = pet.position.y + altDir.y * speed * 0.7 * dt;
+          
+          if (altDir.x !== 0 && isWalkable(this.state.dungeon, altNewX, pet.position.y)) {
+            pet.position.x = altNewX;
+            moved = true;
+          }
+          if (altDir.y !== 0 && isWalkable(this.state.dungeon, pet.position.x, altNewY)) {
+            pet.position.y = altNewY;
+            moved = true;
+          }
+        }
       }
       
       if (dir.x < -0.1) pet.direction = -1;
       else if (dir.x > 0.1) pet.direction = 1;
       
-      pet.animTimer += deltaTime;
-      if (pet.animTimer > 120) {
-        pet.animFrame = (pet.animFrame + 1) % 4;
-        pet.animTimer = 0;
+      if (moved) {
+        pet.animTimer += deltaTime;
+        if (pet.animTimer > 120) {
+          pet.animFrame = (pet.animFrame + 1) % 4;
+          pet.animTimer = 0;
+        }
       }
     } else {
       pet.animFrame = 0;
@@ -816,8 +890,8 @@ export class GameEngine {
       invincible: 0,
     };
     
-    const petType = getRandomPetType();
-    const pet = createPet(petType, { x: startPos.x - 30, y: startPos.y + 20 });
+    const selectedPetType = saveData.selectedPet || 'fire_dragonling';
+    const pet = createPet(selectedPetType as any, { x: startPos.x - 30, y: startPos.y + 20 });
     this.state.pet = pet;
     
     this.updateSkillsFromRunes();
@@ -1056,8 +1130,9 @@ export class GameEngine {
       invincible: 0,
     };
     
-    const challengePetType = getRandomPetType();
-    const challengePet = createPet(challengePetType, { x: startPos.x - 30, y: startPos.y + 20 });
+    const challengeSaveData = loadSaveData();
+    const challengePetType = challengeSaveData.selectedPet || 'fire_dragonling';
+    const challengePet = createPet(challengePetType as any, { x: startPos.x - 30, y: startPos.y + 20 });
     this.state.pet = challengePet;
     
     this.updateSkillsFromRunes();

@@ -29,6 +29,7 @@ interface GameStore {
   showTalentTree: boolean;
   showChallengeInfo: boolean;
   showBadgePanel: boolean;
+  showPetPanel: boolean;
   toasts: ToastMessage[];
   draggedRune: Rune | null;
   earnedTalentPoints: number;
@@ -59,6 +60,7 @@ interface GameStore {
   setShowTalentTree: (show: boolean) => void;
   setShowChallengeInfo: (show: boolean) => void;
   setShowBadgePanel: (show: boolean) => void;
+  setShowPetPanel: (show: boolean) => void;
   setDraggedRune: (rune: Rune | null) => void;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   removeToast: (id: string) => void;
@@ -85,6 +87,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   showTalentTree: false,
   showChallengeInfo: false,
   showBadgePanel: false,
+  showPetPanel: false,
   toasts: [],
   draggedRune: null,
   earnedTalentPoints: 0,
@@ -115,6 +118,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setShowTalentTree: (showTalentTree) => set({ showTalentTree }),
   setShowChallengeInfo: (showChallengeInfo) => set({ showChallengeInfo }),
   setShowBadgePanel: (showBadgePanel) => set({ showBadgePanel }),
+  setShowPetPanel: (showPetPanel) => set({ showPetPanel }),
   setDraggedRune: (draggedRune) => set({ draggedRune }),
   
   addToast: (toast) => {
