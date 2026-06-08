@@ -464,3 +464,46 @@ export const getStatDisplayValue = (statType: string, value: number): string => 
 export const getEquipmentByType = (type: string): EquipmentTemplate[] => {
   return EQUIPMENT_TEMPLATES.filter(t => t.type === type);
 };
+
+export const generateShopEquipment = (count: number = 6): Equipment[] => {
+  const shopItems: Equipment[] = [];
+  const usedTemplateIds = new Set<string>();
+  
+  const totalWeight = Object.values(RARITY_WEIGHTS).reduce((a, b) => a + b, 0);
+  
+  while (shopItems.length < count && usedTemplateIds.size < EQUIPMENT_TEMPLATES.length) {
+    let random = Math.random() * totalWeight;
+    let selectedRarity: EquipmentRarity = 'common';
+    
+    for (const [r, weight] of Object.entries(RARITY_WEIGHTS) as [EquipmentRarity, number][]) {
+      random -= weight;
+      if (random <= 0) {
+        selectedRarity = r;
+        break;
+      }
+    }
+    
+    const pool = EQUIPMENT_TEMPLATES.filter(t => t.rarity === selectedRarity && !usedTemplateIds.has(t.id));
+    if (pool.length === 0) continue;
+    
+    const template = pool[Math.floor(Math.random() * pool.length)];
+    const level = Math.max(1, Math.floor(Math.random() * 3) + 1);
+    const equipment = createEquipment(template.id, level);
+    
+    if (equipment) {
+      usedTemplateIds.add(template.id);
+      shopItems.push(equipment);
+    }
+  }
+  
+  return shopItems;
+};
+
+export const getBuyPrice = (equipment: Equipment): number => {
+  return Math.floor(equipment.price * 1.5);
+};
+
+export const getSellPrice = (equipment: Equipment): number => {
+  const durabilityRatio = equipment.durability / equipment.maxDurability;
+  return Math.floor(equipment.price * 0.3 * durabilityRatio);
+};

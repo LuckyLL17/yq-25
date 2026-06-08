@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { getGameEngine } from '../game/GameEngine';
 import { 
@@ -8,9 +8,11 @@ import {
   getStatName, 
   getStatDisplayValue,
   getUpgradeCost,
+  getBuyPrice,
+  getSellPrice,
 } from '../data/equipment';
 import type { Equipment, EquipmentSlotType } from '../types/game';
-import { X, Sword, Shield, Gem, Sparkles, Star, TrendingUp, AlertTriangle } from 'lucide-react';
+import { X, Sword, Shield, Gem, Sparkles, Star, TrendingUp, AlertTriangle, ShoppingBag, RefreshCw, Coins } from 'lucide-react';
 
 const EquipmentCard = ({
   equipment,
@@ -167,6 +169,9 @@ const EquipmentDetail = ({
   onEquip,
   onUnequip,
   onUpgrade,
+  onBuy,
+  onSell,
+  mode = 'inventory',
   isEquipped,
   canUpgrade,
   upgradeCost,
@@ -175,6 +180,9 @@ const EquipmentDetail = ({
   onEquip?: () => void;
   onUnequip?: () => void;
   onUpgrade?: () => void;
+  onBuy?: () => void;
+  onSell?: () => void;
+  mode?: 'inventory' | 'shop';
   isEquipped: boolean;
   canUpgrade: boolean;
   upgradeCost: number;
@@ -183,6 +191,9 @@ const EquipmentDetail = ({
   const isBroken = equipment.durability <= 0;
   const { saveData } = useGameStore();
   const canAffordUpgrade = saveData.talentPoints >= upgradeCost;
+  const buyPrice = getBuyPrice(equipment);
+  const sellPrice = getSellPrice(equipment);
+  const canAffordBuy = saveData.talentPoints >= buyPrice;
 
   return (
     <div className="bg-gray-800/50 rounded-xl border-2 border-gray-700 p-4">
@@ -266,38 +277,65 @@ const EquipmentDetail = ({
       </div>
 
       <div className="flex gap-2">
-        {isEquipped ? (
-          <button
-            onClick={onUnequip}
-            className="flex-1 py-2 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg transition-colors"
-          >
-            卸下装备
-          </button>
+        {mode === 'shop' ? (
+          <>
+            <button
+              onClick={onBuy}
+              disabled={!canAffordBuy}
+              className={`flex-1 py-2 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                canAffordBuy
+                  ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white'
+                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              <ShoppingBag className="w-4 h-4" />
+              购买 ({buyPrice}⭐)
+            </button>
+          </>
         ) : (
-          <button
-            onClick={onEquip}
-            disabled={isBroken}
-            className={`flex-1 py-2 font-bold rounded-lg transition-all ${
-              isBroken
-                ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white'
-            }`}
-          >
-            {isBroken ? '已损坏' : '装备'}
-          </button>
+          <>
+            {isEquipped ? (
+              <button
+                onClick={onUnequip}
+                className="flex-1 py-2 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg transition-colors"
+              >
+                卸下装备
+              </button>
+            ) : (
+              <button
+                onClick={onEquip}
+                disabled={isBroken}
+                className={`flex-1 py-2 font-bold rounded-lg transition-all ${
+                  isBroken
+                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white'
+                }`}
+              >
+                {isBroken ? '已损坏' : '装备'}
+              </button>
+            )}
+            <button
+              onClick={onUpgrade}
+              disabled={!canUpgrade || !canAffordUpgrade}
+              className={`flex-1 py-2 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                canUpgrade && canAffordUpgrade
+                  ? 'bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white'
+                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4" />
+              升级 ({upgradeCost}⭐)
+            </button>
+            <button
+              onClick={onSell}
+              className="py-2 px-4 bg-gray-700 hover:bg-gray-600 text-orange-400 font-bold rounded-lg transition-all flex items-center justify-center gap-1"
+              title="出售装备"
+            >
+              <Coins className="w-4 h-4" />
+              {sellPrice}
+            </button>
+          </>
         )}
-        <button
-          onClick={onUpgrade}
-          disabled={!canUpgrade || !canAffordUpgrade}
-          className={`flex-1 py-2 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
-            canUpgrade && canAffordUpgrade
-              ? 'bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white'
-              : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-          }`}
-        >
-          <TrendingUp className="w-4 h-4" />
-          升级 ({upgradeCost}⭐)
-        </button>
       </div>
     </div>
   );
@@ -315,13 +353,24 @@ const EquipmentPanel = () => {
     addToast,
     saveData,
     scene,
+    shopEquipment,
+    refreshShop,
+    buyEquipment,
+    sellEquipment,
   } = useGameStore();
   const engine = getGameEngine();
 
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
   const [filterType, setFilterType] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'shop'>('inventory');
 
   const isInGame = scene === 'playing';
+
+  useEffect(() => {
+    if (showEquipmentPanel && shopEquipment.length === 0) {
+      refreshShop();
+    }
+  }, [showEquipmentPanel, shopEquipment.length, refreshShop]);
 
   const handleEquip = (equipment: Equipment) => {
     if (equipment.durability <= 0) {
@@ -369,7 +418,41 @@ const EquipmentPanel = () => {
     }
   };
 
+  const handleBuy = (equipment: Equipment) => {
+    const price = getBuyPrice(equipment);
+    if (saveData.talentPoints < price) {
+      addToast({
+        type: 'info',
+        title: '天赋点不足',
+        description: `购买需要 ${price} 天赋点`,
+      });
+      return;
+    }
+    const success = buyEquipment(equipment.instanceId);
+    if (success) {
+      setSelectedEquipment(null);
+    }
+  };
+
+  const handleSell = (equipment: Equipment) => {
+    const price = getSellPrice(equipment);
+    const success = sellEquipment(equipment.instanceId);
+    if (success) {
+      setSelectedEquipment(null);
+      addToast({
+        type: 'success',
+        title: `出售成功`,
+        description: `获得 ${price} 天赋点`,
+      });
+    }
+  };
+
   const filteredInventory = equipmentInventory.filter(e => {
+    if (filterType === 'all') return true;
+    return e.type === filterType;
+  });
+
+  const filteredShop = shopEquipment.filter(e => {
     if (filterType === 'all') return true;
     return e.type === filterType;
   });
@@ -377,6 +460,7 @@ const EquipmentPanel = () => {
   const allEquipment = [
     ...equipmentInventory,
     ...Object.values(equippedEquipment).filter(Boolean) as Equipment[],
+    ...shopEquipment,
   ];
 
   const getSelectedEquip = (): Equipment | null => {
@@ -387,6 +471,9 @@ const EquipmentPanel = () => {
   const selectedEquip = getSelectedEquip();
   const isSelectedEquipped = selectedEquip 
     ? Object.values(equippedEquipment).some(e => e?.instanceId === selectedEquip.instanceId)
+    : false;
+  const isSelectedInShop = selectedEquip
+    ? shopEquipment.some(e => e.instanceId === selectedEquip.instanceId)
     : false;
   const upgradeCost = selectedEquip ? getUpgradeCost(selectedEquip) : 0;
   const canUpgrade = selectedEquip ? selectedEquip.level < selectedEquip.maxLevel : false;
@@ -455,6 +542,9 @@ const EquipmentPanel = () => {
               onEquip={() => handleEquip(selectedEquip)}
               onUnequip={() => handleUnequip(selectedEquip.type as EquipmentSlotType)}
               onUpgrade={() => handleUpgrade(selectedEquip)}
+              onBuy={() => handleBuy(selectedEquip)}
+              onSell={() => handleSell(selectedEquip)}
+              mode={isSelectedInShop ? 'shop' : 'inventory'}
               isEquipped={isSelectedEquipped}
               canUpgrade={canUpgrade}
               upgradeCost={upgradeCost}
@@ -462,58 +552,131 @@ const EquipmentPanel = () => {
           </div>
         )}
 
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-bold text-blue-400 flex items-center gap-2">
-              <Gem className="w-5 h-5" />
-              装备背包 ({equipmentInventory.length})
-            </h3>
-            <div className="flex gap-2">
-              {[
-                { key: 'all', label: '全部' },
-                { key: 'weapon', label: '武器' },
-                { key: 'armor', label: '防具' },
-                { key: 'accessory', label: '饰品' },
-              ].map(filter => (
-                <button
-                  key={filter.key}
-                  onClick={() => setFilterType(filter.key)}
-                  className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-                    filterType === filter.key
-                      ? 'bg-orange-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
+        <div className="mb-4">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setActiveTab('inventory')}
+              className={`flex-1 py-2 px-4 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                activeTab === 'inventory'
+                  ? 'bg-orange-600 text-white'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              <Gem className="w-4 h-4" />
+              装备背包
+            </button>
+            <button
+              onClick={() => setActiveTab('shop')}
+              className={`flex-1 py-2 px-4 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
+                activeTab === 'shop'
+                  ? 'bg-green-600 text-white'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              <ShoppingBag className="w-4 h-4" />
+              装备商店
+            </button>
           </div>
-
-          {filteredInventory.length > 0 ? (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
-              {filteredInventory.map(equipment => (
-                <EquipmentCard
-                  key={equipment.instanceId}
-                  equipment={equipment}
-                  onClick={() => setSelectedEquipment(equipment)}
-                  isSelected={selectedEquipment?.instanceId === equipment.instanceId}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <Gem className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>暂无装备</p>
-              <p className="text-sm mt-1">击败怪物或打开宝箱获取装备</p>
-            </div>
-          )}
         </div>
+
+        {activeTab === 'shop' ? (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-bold text-green-400 flex items-center gap-2">
+                <ShoppingBag className="w-5 h-5" />
+                今日商品 ({shopEquipment.length})
+              </h3>
+              <button
+                onClick={refreshShop}
+                className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors flex items-center gap-1"
+              >
+                <RefreshCw className="w-4 h-4" />
+                刷新
+              </button>
+            </div>
+
+            <div className="mb-4 flex items-center gap-2 text-sm">
+              <span className="text-yellow-400 font-bold">当前天赋点:</span>
+              <span className="text-yellow-300 font-mono">{saveData.talentPoints} ⭐</span>
+            </div>
+
+            {filteredShop.length > 0 ? (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                {filteredShop.map(equipment => (
+                  <div key={equipment.instanceId} className="relative">
+                    <EquipmentCard
+                      equipment={equipment}
+                      onClick={() => setSelectedEquipment(equipment)}
+                      isSelected={selectedEquipment?.instanceId === equipment.instanceId}
+                    />
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-yellow-500 text-yellow-900 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
+                      {getBuyPrice(equipment)} ⭐
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <ShoppingBag className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>商店暂无商品</p>
+                <p className="text-sm mt-1">点击刷新按钮获取新商品</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-bold text-blue-400 flex items-center gap-2">
+                <Gem className="w-5 h-5" />
+                装备背包 ({equipmentInventory.length})
+              </h3>
+              <div className="flex gap-2">
+                {[
+                  { key: 'all', label: '全部' },
+                  { key: 'weapon', label: '武器' },
+                  { key: 'armor', label: '防具' },
+                  { key: 'accessory', label: '饰品' },
+                ].map(filter => (
+                  <button
+                    key={filter.key}
+                    onClick={() => setFilterType(filter.key)}
+                    className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+                      filterType === filter.key
+                        ? 'bg-orange-600 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {filteredInventory.length > 0 ? (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                {filteredInventory.map(equipment => (
+                  <EquipmentCard
+                    key={equipment.instanceId}
+                    equipment={equipment}
+                    onClick={() => setSelectedEquipment(equipment)}
+                    isSelected={selectedEquipment?.instanceId === equipment.instanceId}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <Gem className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>暂无装备</p>
+                <p className="text-sm mt-1">击败怪物或打开宝箱获取装备</p>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mt-6 p-3 bg-orange-900/30 rounded-lg border border-orange-700/50">
           <p className="text-gray-300 text-sm">
             <span className="text-yellow-400 font-bold">提示：</span>
-            装备可以从宝箱和怪物掉落中获取。每件装备都有耐久度，战斗中会消耗耐久，耐久为0时装备失效。
+            装备可以从宝箱和怪物掉落中获取，也可以在商店中用天赋点购买。每件装备都有耐久度，战斗中会消耗耐久，耐久为0时装备失效。
             使用<span className="text-yellow-400"> 天赋点 </span>可以升级装备，提升属性和耐久度上限。
           </p>
         </div>

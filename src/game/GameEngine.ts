@@ -6,7 +6,7 @@ import { calculateTalentEffects } from '../data/talents';
 import { generateId, distance, clamp, normalize } from './utils/math';
 import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, drawPet, getElementColor, getElementGlowColor } from './utils/pixel';
 import { createPet, PET_SKILLS } from '../data/pets';
-import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, getChallengeRecord, unlockBadge, getStreakDays, getPetSkill, discoverEquipment } from './utils/storage';
+import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, getChallengeRecord, unlockBadge, getStreakDays, getPetSkill, discoverEquipment, saveEquipment } from './utils/storage';
 import { getRandomEquipment, getEquipmentTemplate } from '../data/equipment';
 
 export class GameEngine {
@@ -855,6 +855,7 @@ export class GameEngine {
       if (equipment) {
         this.state.equipmentInventory.push(equipment);
         discoverEquipment(equipment.templateId);
+        saveEquipment(this.state.equipmentInventory, this.state.equippedEquipment);
         return equipment;
       }
     }
@@ -938,6 +939,7 @@ export class GameEngine {
           this.state.equipmentInventory.push(equipment);
           rewardEquipment.push(equipment);
           discoverEquipment(equipment.templateId);
+          saveEquipment(this.state.equipmentInventory, this.state.equippedEquipment);
         }
       }
       

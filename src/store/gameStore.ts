@@ -2,7 +2,30 @@ import { create } from 'zustand';
 import type { GameScene, Rune, Skill, Player, Monster, Chest, SaveData, DailyChallenge, Equipment, EquipmentSlotType } from '../types/game';
 import { loadSaveData, unlockTalent as saveUnlockTalent, saveEquipment } from '../game/utils/storage';
 import { getTalentCost, canUnlockTalent } from '../data/talents';
-import { upgradeEquipment as upgradeEquip, getUpgradeCost } from '../data/equipment';
+import { upgradeEquipment as upgradeEquip, getUpgradeCost, getEquipmentTemplate, generateShopEquipment, getBuyPrice, getSellPrice } from '../data/equipment';
+
+const loadEquipmentFromSaveData = (saveData: SaveData): { inventory: Equipment[]; equipped: Record<EquipmentSlotType, Equipment | null> } => {
+  const inventory = saveData.equipmentInventory || [];
+  const equippedIds = saveData.equippedEquipment || {};
+  
+  const equipped: Record<EquipmentSlotType, Equipment | null> = {
+    weapon: null,
+    armor: null,
+    accessory: null,
+  };
+  
+  for (const slot of ['weapon', 'armor', 'accessory'] as EquipmentSlotType[]) {
+    const instanceId = equippedIds[slot];
+    if (instanceId) {
+      const equip = inventory.find(e => e.instanceId === instanceId);
+      if (equip) {
+        equipped[slot] = equip;
+      }
+    }
+  }
+  
+  return { inventory, equipped };
+};
 
 interface ToastMessage {
   id: string;
@@ -47,6 +70,8 @@ interface GameStore {
   challengePreviousBestTime: number | null;
   equipmentInventory: Equipment[];
   equippedEquipment: Record<EquipmentSlotType, Equipment | null>;
+  shopEquipment: Equipment[];
+  lastShopRefresh: number;
   
   setScene: (scene: GameScene) => void;
   setPlayer: (player: Player) => void;
@@ -77,47 +102,52 @@ interface GameStore {
   upgradeEquipmentItem: (instanceId: string) => boolean;
   addEquipmentToInventory: (equipment: Equipment) => void;
   removeEquipmentFromInventory: (instanceId: string) => void;
+  refreshShop: () => void;
+  buyEquipment: (instanceId: string) => boolean;
+  sellEquipment: (instanceId: string) => boolean;
 }
 
-export const useGameStore = create<GameStore>((set, get) => ({
-  scene: 'menu',
-  player: null,
-  monsters: [],
-  chests: [],
-  runeInventory: [],
-  equippedRunes: [null, null, null, null],
-  activeSkills: [],
-  currentLevel: 1,
-  killCount: 0,
-  gold: 0,
-  saveData: loadSaveData(),
-  combineSlot1: null,
-  combineSlot2: null,
-  showRunePanel: false,
-  showTalentTree: false,
-  showChallengeInfo: false,
-  showBadgePanel: false,
-  showPetPanel: false,
-  showEquipmentPanel: false,
-  toasts: [],
-  draggedRune: null,
-  earnedTalentPoints: 0,
-  isChallengeMode: false,
-  challenge: null,
-  challengeTimeRemaining: 0,
-  challengeTimeSpent: 0,
-  challengeCompleted: false,
-  challengeFailed: false,
-  challengeDamageTaken: 0,
-  challengeIsFirstCompletion: false,
-  challengeIsNewBestTime: false,
-  challengePreviousBestTime: null,
-  equipmentInventory: [],
-  equippedEquipment: {
-    weapon: null,
-    armor: null,
-    accessory: null,
-  },
+export const useGameStore = create<GameStore>((set, get) => {
+  const initialSaveData = loadSaveData();
+  const initialEquipment = loadEquipmentFromSaveData(initialSaveData);
+  
+  return {
+    scene: 'menu',
+    player: null,
+    monsters: [],
+    chests: [],
+    runeInventory: [],
+    equippedRunes: [null, null, null, null],
+    activeSkills: [],
+    currentLevel: 1,
+    killCount: 0,
+    gold: 0,
+    saveData: initialSaveData,
+    combineSlot1: null,
+    combineSlot2: null,
+    showRunePanel: false,
+    showTalentTree: false,
+    showChallengeInfo: false,
+    showBadgePanel: false,
+    showPetPanel: false,
+    showEquipmentPanel: false,
+    toasts: [],
+    draggedRune: null,
+    earnedTalentPoints: 0,
+    isChallengeMode: false,
+    challenge: null,
+    challengeTimeRemaining: 0,
+    challengeTimeSpent: 0,
+    challengeCompleted: false,
+    challengeFailed: false,
+    challengeDamageTaken: 0,
+    challengeIsFirstCompletion: false,
+    challengeIsNewBestTime: false,
+    challengePreviousBestTime: null,
+    equipmentInventory: initialEquipment.inventory,
+    equippedEquipment: initialEquipment.equipped,
+    shopEquipment: [],
+    lastShopRefresh: 0,
   
   setScene: (scene) => set({ scene }),
   setPlayer: (player) => set({ player }),
@@ -152,7 +182,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   
   refreshSaveData: () => {
-    set({ saveData: loadSaveData() });
+    const newSaveData = loadSaveData();
+    const equipmentData = loadEquipmentFromSaveData(newSaveData);
+    set({ 
+      saveData: newSaveData,
+      equipmentInventory: equipmentData.inventory,
+      equippedEquipment: equipmentData.equipped,
+    });
   },
   
   unlockTalent: (talentId) => {
@@ -343,4 +379,73 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ equipmentInventory: newInventory });
     saveEquipment(newInventory, state.equippedEquipment);
   },
-}));
+
+  refreshShop: () => {
+    const shopItems = generateShopEquipment(6);
+    set({ 
+      shopEquipment: shopItems,
+      lastShopRefresh: Date.now(),
+    });
+  },
+
+  buyEquipment: (instanceId: string): boolean => {
+    const state = get();
+    const equipment = state.shopEquipment.find(e => e.instanceId === instanceId);
+    if (!equipment) return false;
+
+    const price = getBuyPrice(equipment);
+    if (state.saveData.talentPoints < price) return false;
+
+    const newTalentPoints = state.saveData.talentPoints - price;
+    const newSaveData = { ...state.saveData, talentPoints: newTalentPoints };
+    
+    const newInventory = [...state.equipmentInventory, equipment];
+    const newShop = state.shopEquipment.filter(e => e.instanceId !== instanceId);
+    
+    saveEquipment(newInventory, state.equippedEquipment, newSaveData);
+    
+    set({
+      saveData: loadSaveData(),
+      equipmentInventory: newInventory,
+      shopEquipment: newShop,
+    });
+
+    state.addToast({
+      type: 'success',
+      title: `购买了 ${equipment.name}`,
+      description: `消耗 ${price} 天赋点`,
+      color: equipment.color,
+    });
+
+    return true;
+  },
+
+  sellEquipment: (instanceId: string): boolean => {
+    const state = get();
+    const equipment = state.equipmentInventory.find(e => e.instanceId === instanceId);
+    if (!equipment) return false;
+
+    const price = getSellPrice(equipment);
+    const newTalentPoints = state.saveData.talentPoints + price;
+    const newSaveData = { ...state.saveData, talentPoints: newTalentPoints };
+    
+    const newInventory = state.equipmentInventory.filter(e => e.instanceId !== instanceId);
+    
+    saveEquipment(newInventory, state.equippedEquipment, newSaveData);
+    
+    set({
+      saveData: loadSaveData(),
+      equipmentInventory: newInventory,
+    });
+
+    state.addToast({
+      type: 'success',
+      title: `出售了 ${equipment.name}`,
+      description: `获得 ${price} 天赋点`,
+      color: equipment.color,
+    });
+
+    return true;
+  },
+  };
+});
