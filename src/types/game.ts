@@ -199,6 +199,54 @@ export interface Chest {
   rewardRuneIds: string[];
 }
 
+export type PotionType = 'health' | 'mana' | 'attack' | 'defense' | 'speed' | 'heal_pet';
+export type PotionRarity = 'common' | 'rare' | 'epic';
+export type MaterialType = 'herb' | 'crystal' | 'mushroom' | 'flower' | 'essence' | 'bone';
+
+export interface PotionMaterial {
+  id: string;
+  name: string;
+  type: MaterialType;
+  color: string;
+  icon: string;
+  description: string;
+  rarity: PotionRarity;
+}
+
+export interface PotionRecipe {
+  id: string;
+  resultPotionId: string;
+  materials: { materialId: string; count: number }[];
+}
+
+export interface Potion {
+  id: string;
+  templateId: string;
+  name: string;
+  type: PotionType;
+  color: string;
+  icon: string;
+  description: string;
+  rarity: PotionRarity;
+  value: number;
+  duration?: number;
+  cooldown: number;
+  currentCooldown?: number;
+}
+
+export interface PotionTemplate {
+  id: string;
+  name: string;
+  type: PotionType;
+  color: string;
+  icon: string;
+  description: string;
+  rarity: PotionRarity;
+  value: number;
+  duration?: number;
+  cooldown: number;
+}
+
 export interface Projectile {
   id: string;
   position: Position;
@@ -284,6 +332,10 @@ export interface GameState {
   challengePreviousBestTime: number | null;
   equipmentInventory: Equipment[];
   equippedEquipment: Record<EquipmentSlotType, Equipment | null>;
+  potionInventory: Potion[];
+  materialInventory: PotionMaterial[];
+  potionCooldowns: Record<string, number>;
+  potionBuffTimers: Record<string, number>;
 }
 
 export interface SaveData {
@@ -297,6 +349,10 @@ export interface SaveData {
   unlockedPets: string[];
   selectedPet: string | null;
   petSkills: Record<string, string>;
+  potionInventory: Potion[];
+  materialInventory: PotionMaterial[];
+  discoveredPotions: string[];
+  discoveredMaterials: string[];
 }
 
 export type TalentEffectType = 

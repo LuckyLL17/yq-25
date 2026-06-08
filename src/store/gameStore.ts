@@ -1,8 +1,9 @@
 import { create } from 'zustand';
-import type { GameScene, Rune, Skill, Player, Monster, Chest, SaveData, DailyChallenge, Equipment, EquipmentSlotType } from '../types/game';
-import { loadSaveData, unlockTalent as saveUnlockTalent, saveEquipment } from '../game/utils/storage';
+import type { GameScene, Rune, Skill, Player, Monster, Chest, SaveData, DailyChallenge, Equipment, EquipmentSlotType, Potion, PotionMaterial } from '../types/game';
+import { loadSaveData, unlockTalent as saveUnlockTalent, saveEquipment, savePotions } from '../game/utils/storage';
 import { getTalentCost, canUnlockTalent } from '../data/talents';
 import { upgradeEquipment as upgradeEquip, getUpgradeCost, getEquipmentTemplate, generateShopEquipment, getBuyPrice, getSellPrice } from '../data/equipment';
+import { createPotion, getPotionTemplate } from '../data/potions';
 
 const loadEquipmentFromSaveData = (saveData: SaveData): { inventory: Equipment[]; equipped: Record<EquipmentSlotType, Equipment | null> } => {
   const inventory = saveData.equipmentInventory || [];
@@ -72,6 +73,11 @@ interface GameStore {
   equippedEquipment: Record<EquipmentSlotType, Equipment | null>;
   shopEquipment: Equipment[];
   lastShopRefresh: number;
+  potionInventory: Potion[];
+  materialInventory: PotionMaterial[];
+  potionCooldowns: Record<string, number>;
+  potionBuffTimers: Record<string, number>;
+  showPotionPanel: boolean;
   
   setScene: (scene: GameScene) => void;
   setPlayer: (player: Player) => void;
@@ -91,6 +97,7 @@ interface GameStore {
   setShowBadgePanel: (show: boolean) => void;
   setShowPetPanel: (show: boolean) => void;
   setShowEquipmentPanel: (show: boolean) => void;
+  setShowPotionPanel: (show: boolean) => void;
   setDraggedRune: (rune: Rune | null) => void;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   removeToast: (id: string) => void;
@@ -105,6 +112,10 @@ interface GameStore {
   refreshShop: () => void;
   buyEquipment: (instanceId: string) => boolean;
   sellEquipment: (instanceId: string) => boolean;
+  usePotion: (potionId: string, target?: 'player' | 'pet') => boolean;
+  craftPotion: (potionTemplateId: string) => boolean;
+  setPotionInventory: (potions: Potion[]) => void;
+  setMaterialInventory: (materials: PotionMaterial[]) => void;
 }
 
 export const useGameStore = create<GameStore>((set, get) => {
@@ -148,6 +159,11 @@ export const useGameStore = create<GameStore>((set, get) => {
     equippedEquipment: initialEquipment.equipped,
     shopEquipment: [],
     lastShopRefresh: 0,
+    potionInventory: initialSaveData.potionInventory || [],
+    materialInventory: initialSaveData.materialInventory || [],
+    potionCooldowns: {},
+    potionBuffTimers: {},
+    showPotionPanel: false,
   
   setScene: (scene) => set({ scene }),
   setPlayer: (player) => set({ player }),
@@ -167,6 +183,9 @@ export const useGameStore = create<GameStore>((set, get) => {
   setShowBadgePanel: (showBadgePanel) => set({ showBadgePanel }),
   setShowPetPanel: (showPetPanel) => set({ showPetPanel }),
   setShowEquipmentPanel: (showEquipmentPanel) => set({ showEquipmentPanel }),
+  setShowPotionPanel: (showPotionPanel) => set({ showPotionPanel }),
+  setPotionInventory: (potionInventory) => set({ potionInventory }),
+  setMaterialInventory: (materialInventory) => set({ materialInventory }),
   setDraggedRune: (draggedRune) => set({ draggedRune }),
   
   addToast: (toast) => {
@@ -242,6 +261,10 @@ export const useGameStore = create<GameStore>((set, get) => {
         armor: null,
         accessory: null,
       },
+      potionInventory: state.potionInventory || [],
+      materialInventory: state.materialInventory || [],
+      potionCooldowns: state.potionCooldowns || {},
+      potionBuffTimers: state.potionBuffTimers || {},
     });
     
     if (state.scene === 'gameover' || state.scene === 'victory') {
@@ -446,6 +469,51 @@ export const useGameStore = create<GameStore>((set, get) => {
     });
 
     return true;
+  },
+
+  usePotion: (potionId: string, target: 'player' | 'pet' = 'player'): boolean => {
+    const { getGameEngine } = require('../game/GameEngine');
+    const engine = getGameEngine();
+    if (!engine) return false;
+    
+    const success = engine.usePotion(potionId, target);
+    
+    if (success) {
+      const potion = engine.state.potionInventory.find(p => p.templateId === getPotionTemplate(potionId)?.id);
+      const template = getPotionTemplate(potionId);
+      if (template) {
+        get().addToast({
+          type: 'success',
+          title: `使用了 ${template.name}`,
+          description: template.description,
+          color: template.color,
+        });
+      }
+    }
+    
+    return success;
+  },
+
+  craftPotion: (potionTemplateId: string): boolean => {
+    const { getGameEngine } = require('../game/GameEngine');
+    const engine = getGameEngine();
+    if (!engine) return false;
+    
+    const success = engine.craftPotion(potionTemplateId);
+    
+    if (success) {
+      const template = getPotionTemplate(potionTemplateId);
+      if (template) {
+        get().addToast({
+          type: 'success',
+          title: `合成了 ${template.name}`,
+          description: template.description,
+          color: template.color,
+        });
+      }
+    }
+    
+    return success;
   },
   };
 });

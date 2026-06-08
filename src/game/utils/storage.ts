@@ -1,4 +1,4 @@
-import type { SaveData, ChallengeRecord } from '../../types/game';
+import type { SaveData, ChallengeRecord, Potion, PotionMaterial } from '../../types/game';
 
 const SAVE_KEY = 'rune_fox_save';
 
@@ -23,6 +23,10 @@ const defaultSaveData: SaveData = {
     accessory: null,
   },
   discoveredEquipment: [],
+  potionInventory: [],
+  materialInventory: [],
+  discoveredPotions: [],
+  discoveredMaterials: [],
 };
 
 export const loadSaveData = (): SaveData => {
@@ -248,4 +252,95 @@ export const getEquippedEquipment = (): Record<string, string | null> => {
     armor: null,
     accessory: null,
   };
+};
+
+export const savePotions = (
+  potions?: Potion[],
+  materials?: PotionMaterial[],
+  newSaveData?: SaveData
+): SaveData => {
+  const data = newSaveData || loadSaveData();
+  
+  if (potions !== undefined) {
+    data.potionInventory = potions;
+  }
+  
+  if (materials !== undefined) {
+    data.materialInventory = materials;
+  }
+  
+  saveSaveData(data);
+  return data;
+};
+
+export const discoverPotion = (templateId: string): SaveData => {
+  const data = loadSaveData();
+  if (!data.discoveredPotions.includes(templateId)) {
+    data.discoveredPotions.push(templateId);
+    saveSaveData(data);
+  }
+  return data;
+};
+
+export const discoverMaterial = (materialId: string): SaveData => {
+  const data = loadSaveData();
+  if (!data.discoveredMaterials.includes(materialId)) {
+    data.discoveredMaterials.push(materialId);
+    saveSaveData(data);
+  }
+  return data;
+};
+
+export const getPotionInventory = (): Potion[] => {
+  const data = loadSaveData();
+  return data.potionInventory || [];
+};
+
+export const getMaterialInventory = (): PotionMaterial[] => {
+  const data = loadSaveData();
+  return data.materialInventory || [];
+};
+
+export const addPotionToInventory = (potion: Potion): SaveData => {
+  const data = loadSaveData();
+  data.potionInventory = [...(data.potionInventory || []), potion];
+  saveSaveData(data);
+  return data;
+};
+
+export const removePotionFromInventory = (potionId: string): SaveData => {
+  const data = loadSaveData();
+  data.potionInventory = (data.potionInventory || []).filter(p => p.id !== potionId);
+  saveSaveData(data);
+  return data;
+};
+
+export const addMaterialToInventory = (material: PotionMaterial): SaveData => {
+  const data = loadSaveData();
+  data.materialInventory = [...(data.materialInventory || []), material];
+  saveSaveData(data);
+  return data;
+};
+
+export const removeMaterialFromInventory = (materialId: string, count: number = 1): SaveData => {
+  const data = loadSaveData();
+  let remaining = count;
+  const newMaterials: PotionMaterial[] = [];
+  
+  for (const mat of (data.materialInventory || [])) {
+    if (remaining > 0 && mat.id === materialId) {
+      remaining--;
+    } else {
+      newMaterials.push(mat);
+    }
+  }
+  
+  data.materialInventory = newMaterials;
+  saveSaveData(data);
+  return data;
+};
+
+export const getMaterialCount = (materialId: string): number => {
+  const data = loadSaveData();
+  return (data.materialInventory || []).filter(m => m.id === materialId).length;
 };

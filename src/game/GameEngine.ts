@@ -1,4 +1,4 @@
-import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType } from '../types/game';
+import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType, Potion, PotionMaterial } from '../types/game';
 import { GAME_CONFIG } from '../data/config';
 import { generateDungeon, generateMonsters, generateChests, getPlayerStartPosition, updateFOV, isWalkable } from './utils/dungeon';
 import { getRandomRunes, createSkill, ALL_RUNES, SKILLS } from '../data/runes';
@@ -6,8 +6,9 @@ import { calculateTalentEffects } from '../data/talents';
 import { generateId, distance, clamp, normalize } from './utils/math';
 import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, drawPet, getElementColor, getElementGlowColor } from './utils/pixel';
 import { createPet, PET_SKILLS } from '../data/pets';
-import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, getChallengeRecord, unlockBadge, getStreakDays, getPetSkill, discoverEquipment, saveEquipment } from './utils/storage';
+import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, getChallengeRecord, unlockBadge, getStreakDays, getPetSkill, discoverEquipment, saveEquipment, savePotions, discoverPotion, discoverMaterial } from './utils/storage';
 import { getRandomEquipment, getEquipmentTemplate } from '../data/equipment';
+import { getRandomPotion, getRandomMaterial, createPotion, getPotionTemplate, getRecipeByPotionId } from '../data/potions';
 
 export class GameEngine {
   private canvas: HTMLCanvasElement | null = null;
@@ -20,7 +21,7 @@ export class GameEngine {
   
   public state: GameState;
   public onStateChange: (() => void) | null = null;
-  public onChestOpened: ((rewards: { runes: Rune[]; equipment?: Equipment[] }) => void) | null = null;
+  public onChestOpened: ((rewards: { runes: Rune[]; equipment?: Equipment[]; potions: Potion[]; materials: Material[] }) => void) | null = null;
   
   constructor() {
     this.state = this.createInitialState();
@@ -86,6 +87,10 @@ export class GameEngine {
         armor: null,
         accessory: null,
       },
+      potionInventory: [],
+      materialInventory: [],
+      potionCooldowns: {},
+      potionBuffTimers: {},
     };
   }
   
@@ -134,6 +139,8 @@ export class GameEngine {
     this.updateParticles(deltaTime);
     this.updateDamageNumbers(deltaTime);
     this.updateSkillCooldowns(deltaTime);
+    this.updatePotionCooldowns(deltaTime);
+    this.updatePotionBuffs(deltaTime);
     this.updateCamera();
     this.checkChestCollision();
     this.checkStairsCollision();
@@ -783,6 +790,42 @@ export class GameEngine {
     }
   }
   
+  private updatePotionCooldowns(deltaTime: number) {
+    for (const key of Object.keys(this.state.potionCooldowns)) {
+      if (this.state.potionCooldowns[key] > 0) {
+        this.state.potionCooldowns[key] -= deltaTime;
+        if (this.state.potionCooldowns[key] < 0) {
+          this.state.potionCooldowns[key] = 0;
+        }
+      }
+    }
+  }
+  
+  private updatePotionBuffs(deltaTime: number) {
+    const buffTimers = this.state.potionBuffTimers;
+    let needUpdateSpeed = false;
+    
+    for (const key of Object.keys(buffTimers)) {
+      if (buffTimers[key] > 0) {
+        buffTimers[key] -= deltaTime;
+        if (buffTimers[key] <= 0) {
+          buffTimers[key] = 0;
+          if (key === 'speed') {
+            needUpdateSpeed = true;
+          }
+          if (key === 'attack') {
+            this.state.player.damageBoostPercent = 0;
+            this.state.player.damageBoostTimer = 0;
+          }
+        }
+      }
+    }
+    
+    if (needUpdateSpeed) {
+      this.state.player.speed = GAME_CONFIG.PLAYER_SPEED;
+    }
+  }
+  
   private updateHpRegen(deltaTime: number) {
     const saveData = loadSaveData();
     const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
@@ -904,6 +947,8 @@ export class GameEngine {
     chest.opened = true;
     const rewardRunes: Rune[] = [];
     const rewardEquipment: Equipment[] = [];
+    const rewardMaterials: PotionMaterial[] = [];
+    const rewardPotions: Potion[] = [];
     
     if (!this.state.isChallengeMode) {
       for (const runeId of chest.rewardRuneIds) {
@@ -943,6 +988,43 @@ export class GameEngine {
         }
       }
       
+      let materialCount = 1;
+      let potionChance = 0.4;
+      if (chest.type === 'rare') {
+        materialCount = 2;
+        potionChance = 0.6;
+      }
+      if (chest.type === 'epic') {
+        materialCount = 3;
+        potionChance = 0.8;
+      }
+      
+      for (let i = 0; i < materialCount; i++) {
+        const rarity = chest.type === 'epic' ? (Math.random() < 0.3 ? 'epic' : 'rare') :
+                       chest.type === 'rare' ? (Math.random() < 0.5 ? 'rare' : 'common') :
+                       'common';
+        const material = getRandomMaterial(rarity as any);
+        if (material) {
+          this.state.materialInventory.push(material);
+          rewardMaterials.push(material);
+          discoverMaterial(material.id);
+        }
+      }
+      
+      if (Math.random() < potionChance) {
+        const rarity = chest.type === 'epic' ? (Math.random() < 0.3 ? 'epic' : 'rare') :
+                       chest.type === 'rare' ? (Math.random() < 0.4 ? 'rare' : 'common') :
+                       'common';
+        const potion = getRandomPotion(rarity as any);
+        if (potion) {
+          this.state.potionInventory.push(potion);
+          rewardPotions.push(potion);
+          discoverPotion(potion.templateId);
+        }
+      }
+      
+      savePotions(this.state.potionInventory, this.state.materialInventory);
+      
       const goldAmount = Math.floor(20 + this.state.currentLevel * 10 + Math.random() * 30);
       const equipmentStats = this.getEquipmentStats();
       const saveData = loadSaveData();
@@ -961,7 +1043,7 @@ export class GameEngine {
     }
     
     if (this.onChestOpened) {
-      this.onChestOpened({ runes: rewardRunes, equipment: rewardEquipment });
+      this.onChestOpened({ runes: rewardRunes, equipment: rewardEquipment, potions: rewardPotions, materials: rewardMaterials });
     }
     
     this.notifyStateChange();
@@ -1065,6 +1147,11 @@ export class GameEngine {
     const pet = createPet(selectedPetType as any, { x: startPos.x - 30, y: startPos.y + 20 }, savedSkillId || undefined);
     this.state.pet = pet;
     
+    this.state.potionInventory = saveData.potionInventory || [];
+    this.state.materialInventory = saveData.materialInventory || [];
+    this.state.potionCooldowns = {};
+    this.state.potionBuffTimers = {};
+    
     this.updateSkillsFromRunes();
     initialRunes.forEach(r => discoverRune(r.id));
     
@@ -1147,6 +1234,8 @@ export class GameEngine {
         highestLevel: Math.max(this.state.currentLevel, saveData.highestLevel),
         equipmentInventory: this.state.equipmentInventory,
         equippedEquipment: equippedIds,
+        potionInventory: this.state.potionInventory,
+        materialInventory: this.state.materialInventory,
       });
     }
     
@@ -1401,6 +1490,211 @@ export class GameEngine {
     }
   }
   
+  public usePotion(potionId: string, target: 'player' | 'pet' = 'player'): boolean {
+    if (this.state.scene !== 'playing') return false;
+    
+    const potionIndex = this.state.potionInventory.findIndex(p => p.id === potionId);
+    if (potionIndex === -1) return false;
+    
+    const potion = this.state.potionInventory[potionIndex];
+    
+    if (this.state.potionCooldowns[potion.templateId] > 0) return false;
+    
+    let success = false;
+    
+    switch (potion.type) {
+      case 'health':
+        if (target === 'player') {
+          const oldHp = this.state.player.hp;
+          this.state.player.hp = Math.min(this.state.player.maxHp, this.state.player.hp + potion.value);
+          success = this.state.player.hp > oldHp;
+          
+          if (success) {
+            this.addDamageNumber(this.state.player.position, potion.value, '#7bed9f', false);
+            for (let i = 0; i < 12; i++) {
+              this.addParticle(
+                this.state.player.position.x + (Math.random() - 0.5) * 25,
+                this.state.player.position.y - 10 + (Math.random() - 0.5) * 25,
+                '#7bed9f',
+                'magic'
+              );
+            }
+          }
+        }
+        break;
+        
+      case 'attack':
+        if (target === 'player') {
+          this.state.player.damageBoostPercent = Math.max(this.state.player.damageBoostPercent, potion.value);
+          this.state.player.damageBoostTimer = Math.max(this.state.player.damageBoostTimer, potion.duration || 15000);
+          this.state.potionBuffTimers['attack'] = potion.duration || 15000;
+          success = true;
+          
+          for (let i = 0; i < 15; i++) {
+            this.addParticle(
+              this.state.player.position.x + (Math.random() - 0.5) * 35,
+              this.state.player.position.y + (Math.random() - 0.5) * 35,
+              potion.color,
+              'spark'
+            );
+          }
+        }
+        break;
+        
+      case 'defense':
+        if (target === 'player') {
+          this.state.player.shieldTimer = Math.max(this.state.player.shieldTimer, potion.duration || 15000);
+          this.state.potionBuffTimers['defense'] = potion.duration || 15000;
+          success = true;
+          
+          for (let i = 0; i < 15; i++) {
+            this.addParticle(
+              this.state.player.position.x + (Math.random() - 0.5) * 35,
+              this.state.player.position.y + (Math.random() - 0.5) * 35,
+              potion.color,
+              'magic'
+            );
+          }
+        }
+        break;
+        
+      case 'speed':
+        if (target === 'player') {
+          this.state.player.speed = GAME_CONFIG.PLAYER_SPEED * (1 + potion.value / 100);
+          this.state.potionBuffTimers['speed'] = potion.duration || 10000;
+          success = true;
+          
+          for (let i = 0; i < 12; i++) {
+            this.addParticle(
+              this.state.player.position.x + (Math.random() - 0.5) * 30,
+              this.state.player.position.y + (Math.random() - 0.5) * 30,
+              potion.color,
+              'spark'
+            );
+          }
+        }
+        break;
+        
+      case 'heal_pet':
+        if (target === 'pet' && this.state.pet) {
+          const pet = this.state.pet;
+          const healAmount = Math.floor(pet.maxHp * (potion.value / 100));
+          const oldHp = pet.hp;
+          pet.hp = Math.min(pet.maxHp, pet.hp + healAmount);
+          success = pet.hp > oldHp;
+          
+          if (success) {
+            this.addDamageNumber(pet.position, healAmount, '#7bed9f', false);
+            for (let i = 0; i < 10; i++) {
+              this.addParticle(
+                pet.position.x + (Math.random() - 0.5) * 20,
+                pet.position.y - 5 + (Math.random() - 0.5) * 20,
+                '#ff6b81',
+                'magic'
+              );
+            }
+          }
+        }
+        break;
+    }
+    
+    if (success) {
+      this.state.potionCooldowns[potion.templateId] = potion.cooldown;
+      this.state.potionInventory.splice(potionIndex, 1);
+      savePotions(this.state.potionInventory, this.state.materialInventory);
+      this.notifyStateChange();
+    }
+    
+    return success;
+  }
+  
+  public craftPotion(potionTemplateId: string): boolean {
+    const recipe = getRecipeByPotionId(potionTemplateId);
+    if (!recipe) return false;
+    
+    const materialCounts: Record<string, number> = {};
+    for (const mat of this.state.materialInventory) {
+      materialCounts[mat.id] = (materialCounts[mat.id] || 0) + 1;
+    }
+    
+    for (const req of recipe.materials) {
+      if ((materialCounts[req.materialId] || 0) < req.count) {
+        return false;
+      }
+    }
+    
+    for (const req of recipe.materials) {
+      let remaining = req.count;
+      for (let i = this.state.materialInventory.length - 1; i >= 0 && remaining > 0; i--) {
+        if (this.state.materialInventory[i].id === req.materialId) {
+          this.state.materialInventory.splice(i, 1);
+          remaining--;
+        }
+      }
+    }
+    
+    const newPotion = createPotion(potionTemplateId);
+    if (newPotion) {
+      this.state.potionInventory.push(newPotion);
+      discoverPotion(potionTemplateId);
+      savePotions(this.state.potionInventory, this.state.materialInventory);
+      this.notifyStateChange();
+      return true;
+    }
+    
+    return false;
+  }
+  
+  public getMaterialCount(materialId: string): number {
+    return this.state.materialInventory.filter(m => m.id === materialId).length;
+  }
+  
+  public getPotionCooldown(potionTemplateId: string): number {
+    return this.state.potionCooldowns[potionTemplateId] || 0;
+  }
+  
+  private addMaterialDrop(level: number): PotionMaterial | null {
+    const dropChance = 0.3 + level * 0.03;
+    
+    if (Math.random() < dropChance) {
+      const rand = Math.random();
+      let rarity: 'common' | 'rare' | 'epic' = 'common';
+      
+      if (rand > 0.95) rarity = 'epic';
+      else if (rand > 0.7) rarity = 'rare';
+      
+      const material = getRandomMaterial(rarity);
+      if (material) {
+        this.state.materialInventory.push(material);
+        discoverMaterial(material.id);
+        savePotions(this.state.potionInventory, this.state.materialInventory);
+        return material;
+      }
+    }
+    return null;
+  }
+  
+  private addPotionDrop(level: number): Potion | null {
+    const dropChance = 0.1 + level * 0.01;
+    
+    if (Math.random() < dropChance) {
+      const rand = Math.random();
+      let rarity: 'common' | 'rare' | 'epic' = 'common';
+      
+      if (rand > 0.9) rarity = 'epic';
+      else if (rand > 0.6) rarity = 'rare';
+      
+      const potion = getRandomPotion(rarity);
+      if (potion) {
+        this.state.potionInventory.push(potion);
+        discoverPotion(potion.templateId);
+        savePotions(this.state.potionInventory, this.state.materialInventory);
+        return potion;
+      }
+    }
+    return null;
+  }
+  
   private castAreaSkill(skill: Skill) {
     const player = this.state.player;
     
@@ -1597,6 +1891,30 @@ export class GameEngine {
               monster.position.x,
               monster.position.y,
               droppedEquipment.color,
+              'magic'
+            );
+          }
+        }
+        
+        const droppedMaterial = this.addMaterialDrop(this.state.currentLevel);
+        if (droppedMaterial) {
+          for (let i = 0; i < 6; i++) {
+            this.addParticle(
+              monster.position.x + (Math.random() - 0.5) * 20,
+              monster.position.y + (Math.random() - 0.5) * 20,
+              droppedMaterial.color,
+              'magic'
+            );
+          }
+        }
+        
+        const droppedPotion = this.addPotionDrop(this.state.currentLevel);
+        if (droppedPotion) {
+          for (let i = 0; i < 8; i++) {
+            this.addParticle(
+              monster.position.x + (Math.random() - 0.5) * 25,
+              monster.position.y + (Math.random() - 0.5) * 25,
+              droppedPotion.color,
               'magic'
             );
           }

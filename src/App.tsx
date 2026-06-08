@@ -7,6 +7,7 @@ import ChallengePanel from './components/ChallengePanel';
 import ChallengeVictoryScreen from './components/ChallengeVictoryScreen';
 import BadgePanel from './components/BadgePanel';
 import EquipmentPanel from './components/EquipmentPanel';
+import PotionPanel from './components/PotionPanel';
 import { useGameStore } from './store/gameStore';
 import { getGameEngine } from './game/GameEngine';
 
@@ -20,7 +21,7 @@ export default function App() {
       updateFromEngine(state);
     };
     
-    engine.onChestOpened = ({ runes, equipment }) => {
+    engine.onChestOpened = ({ runes, equipment, potions, materials }) => {
       let delay = 0;
       runes.forEach((rune, index) => {
         setTimeout(() => {
@@ -46,6 +47,35 @@ export default function App() {
           delay += 600;
         });
       }
+      potions.forEach((potion, index) => {
+        setTimeout(() => {
+          addToast({
+            type: 'success',
+            title: `获得药水 ${potion.name}`,
+            description: potion.description,
+            color: potion.color,
+          });
+        }, delay);
+        delay += 400;
+      });
+      const materialCounts: Record<string, { count: number; material: any }> = {};
+      for (const mat of materials) {
+        if (!materialCounts[mat.id]) {
+          materialCounts[mat.id] = { count: 0, material: mat };
+        }
+        materialCounts[mat.id].count++;
+      }
+      Object.values(materialCounts).forEach(({ count, material }) => {
+        setTimeout(() => {
+          addToast({
+            type: 'success',
+            title: `获得材料 ${material.name} x${count}`,
+            description: material.description,
+            color: material.color,
+          });
+        }, delay);
+        delay += 350;
+      });
       refreshSaveData();
     };
     
@@ -67,6 +97,7 @@ export default function App() {
       <ChallengeVictoryScreen />
       <BadgePanel />
       <EquipmentPanel />
+      <PotionPanel />
       {scene === 'menu' ? <MainMenu /> : <GameCanvas />}
     </div>
   );

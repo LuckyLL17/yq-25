@@ -1,9 +1,10 @@
 import { getGameEngine } from '../game/GameEngine';
 import { useGameStore } from '../store/gameStore';
-import { Heart, Skull, Swords, Map, Clock, Target, Package, Star } from 'lucide-react';
+import { Heart, Skull, Swords, Map, Clock, Target, Package, Star, FlaskConical, Shield, Sword, Wind, PawPrint } from 'lucide-react';
 import { SKILLS } from '../data/runes';
-import type { RuneElement } from '../types/game';
+import type { RuneElement, Potion } from '../types/game';
 import { formatTime } from '../data/challenges';
+import { getPotionTemplate } from '../data/potions';
 
 const getElementColorClass = (element: RuneElement): string => {
   switch (element) {
@@ -11,6 +12,17 @@ const getElementColorClass = (element: RuneElement): string => {
     case 'ice': return 'from-cyan-400 to-blue-500';
     case 'thunder': return 'from-yellow-400 to-amber-500';
     default: return 'from-gray-400 to-gray-600';
+  }
+};
+
+const getPotionIcon = (type: string) => {
+  switch (type) {
+    case 'health': return <Heart className="w-5 h-5 text-white" />;
+    case 'attack': return <Sword className="w-5 h-5 text-white" />;
+    case 'defense': return <Shield className="w-5 h-5 text-white" />;
+    case 'speed': return <Wind className="w-5 h-5 text-white" />;
+    case 'heal_pet': return <PawPrint className="w-5 h-5 text-white" />;
+    default: return <FlaskConical className="w-5 h-5 text-white" />;
   }
 };
 
@@ -23,7 +35,11 @@ const GameHUD = () => {
     isChallengeMode, 
     challenge, 
     challengeTimeRemaining,
-    chests
+    chests,
+    potionInventory,
+    potionCooldowns,
+    pet,
+    setShowPotionPanel,
   } = useGameStore();
   const engine = getGameEngine();
   
@@ -35,6 +51,16 @@ const GameHUD = () => {
   const isLowTime = isChallengeMode && challengeTimeRemaining < 30;
   const totalMonsters = challenge?.monsterCount || 0;
   const totalChests = challenge?.chestCount || 0;
+  
+  const potionCounts: Record<string, { count: number; potion: Potion }> = {};
+  for (const potion of potionInventory) {
+    if (!potionCounts[potion.templateId]) {
+      potionCounts[potion.templateId] = { count: 0, potion };
+    }
+    potionCounts[potion.templateId].count++;
+  }
+  
+  const quickPotions = Object.values(potionCounts).slice(0, 4);
   
   return (
     <div className="absolute top-0 left-0 right-0 p-4 pointer-events-none z-10">
@@ -156,6 +182,70 @@ const GameHUD = () => {
             </p>
           </div>
         )}
+      </div>
+      
+      <div className="absolute bottom-4 right-4 pointer-events-auto">
+        <div className="bg-gray-900/90 border-4 border-orange-500 p-3 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <FlaskConical className="w-4 h-4 text-orange-400" />
+            <span className="text-white text-xs font-bold">快捷药水</span>
+            <button
+              onClick={() => setShowPotionPanel(true)}
+              className="ml-auto text-xs text-orange-300 hover:text-orange-200 transition-colors"
+            >
+              药炉
+            </button>
+          </div>
+          <div className="flex gap-2">
+            {quickPotions.map(({ count, potion }) => {
+              const cooldown = potionCooldowns[potion.templateId] || 0;
+              const isReady = cooldown <= 0;
+              const cooldownPercent = cooldown / potion.cooldown;
+              
+              return (
+                <button
+                  key={potion.templateId}
+                  onClick={() => engine.usePotion(potion.id, 'player')}
+                  disabled={!isReady}
+                  className={`relative w-12 h-12 rounded-lg border-3 transition-all ${
+                    isReady
+                      ? 'border-yellow-400 hover:scale-110 cursor-pointer'
+                      : 'border-gray-600 cursor-not-allowed opacity-60'
+                  } shadow-lg`}
+                  style={{
+                    backgroundColor: potion.color + '30',
+                    borderColor: potion.color,
+                    boxShadow: isReady ? `0 0 10px ${potion.color}60` : 'none',
+                  }}
+                  title={`${potion.name} x${count}\n${potion.description}\n冷却: ${potion.cooldown / 1000}秒`}
+                >
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    {getPotionIcon(potion.type)}
+                  </div>
+                  
+                  <div className="absolute -top-1 -right-1 w-5 h-5 bg-gray-900 border-2 border-yellow-400 rounded-full flex items-center justify-center">
+                    <span className="text-[10px] font-bold text-yellow-400">{count}</span>
+                  </div>
+                  
+                  {!isReady && (
+                    <div
+                      className="absolute bottom-0 left-0 right-0 bg-black/60 transition-all rounded-b-md"
+                      style={{ height: `${cooldownPercent * 100}%` }}
+                    />
+                  )}
+                  
+                  <div className="absolute inset-0 rounded-md bg-gradient-to-t from-transparent to-white/10 pointer-events-none" />
+                </button>
+              );
+            })}
+            
+            {quickPotions.length === 0 && (
+              <div className="text-gray-500 text-xs py-2 px-3">
+                暂无药水
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
