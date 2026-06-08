@@ -10,22 +10,10 @@ const ChallengeVictoryScreen = () => {
   const { scene, killCount, chests, earnedTalentPoints, challengeTimeSpent, challenge, challengeDamageTaken, saveData, challengeIsFirstCompletion, challengeIsNewBestTime, challengePreviousBestTime } = useGameStore();
   const engine = getGameEngine();
   
-  if (scene !== 'victory') return null;
-  
   const openedChests = chests.filter(c => c.opened).length;
   const streak = getStreakDays();
   const noDamage = challengeDamageTaken === 0;
   const fastComplete = challengeTimeSpent <= 60;
-  
-  const handleRestart = () => {
-    if (challenge) {
-      engine.startChallenge(challenge);
-    }
-  };
-  
-  const handleMainMenu = () => {
-    engine.goToMenu();
-  };
   
   const earnedBadges = useMemo(() => {
     if (!challengeIsFirstCompletion) return [];
@@ -42,6 +30,18 @@ const ChallengeVictoryScreen = () => {
       return !wasUnlocked;
     });
   }, [challengeIsFirstCompletion, fastComplete, noDamage, challenge?.goalType, streak, saveData.badges]);
+  
+  if (scene !== 'victory') return null;
+  
+  const handleRestart = () => {
+    if (challenge) {
+      engine.startChallenge(challenge);
+    }
+  };
+  
+  const handleMainMenu = () => {
+    engine.goToMenu();
+  };
   
   return (
     <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/80">
