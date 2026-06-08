@@ -151,6 +151,7 @@ const RunePanel = () => {
     setShowRunePanel,
     addToast,
     refreshSaveData,
+    isChallengeMode,
   } = useGameStore();
   const engine = getGameEngine();
 
@@ -295,6 +296,14 @@ const RunePanel = () => {
             <X className="w-6 h-6" />
           </button>
         </div>
+        
+        {isChallengeMode && (
+          <div className="mb-4 p-3 bg-yellow-900/30 border-2 border-yellow-600 rounded-lg">
+            <p className="text-yellow-300 text-sm text-center">
+              ⚡ 挑战模式 - 符文已固定，无法更换
+            </p>
+          </div>
+        )}
 
         <div className="mb-6 p-4 bg-gray-800/50 rounded-xl border-2 border-gray-700">
           <h3 className="text-lg font-bold text-yellow-400 mb-4 text-center">
@@ -419,7 +428,7 @@ const RunePanel = () => {
                     <span className="text-gray-500 text-xs">空</span>
                   )}
                 </div>
-                {rune && (
+                {rune && !isChallengeMode && (
                   <button
                     onClick={() => handleUnequipRune(index)}
                     className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-400 transition-colors border-2 border-red-300"

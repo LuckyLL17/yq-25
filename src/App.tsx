@@ -3,6 +3,8 @@ import MainMenu from './components/MainMenu';
 import GameCanvas from './components/GameCanvas';
 import ToastContainer from './components/ToastContainer';
 import TalentTree from './components/TalentTree';
+import ChallengePanel from './components/ChallengePanel';
+import ChallengeVictoryScreen from './components/ChallengeVictoryScreen';
 import { useGameStore } from './store/gameStore';
 import { getGameEngine } from './game/GameEngine';
 
@@ -44,6 +46,8 @@ export default function App() {
     <div className="min-h-screen bg-gray-900 relative">
       <ToastContainer />
       <TalentTree />
+      <ChallengePanel />
+      <ChallengeVictoryScreen />
       {scene === 'menu' ? <MainMenu /> : <GameCanvas />}
     </div>
   );

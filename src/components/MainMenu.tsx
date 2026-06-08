@@ -1,15 +1,20 @@
 import { getGameEngine } from '../game/GameEngine';
 import { useGameStore } from '../store/gameStore';
-import { Play, BookOpen, Sparkles, Flame, Snowflake, Zap, Layers, Clock, ZapOff, Target, Lock, TreeDeciduous } from 'lucide-react';
+import { Play, BookOpen, Sparkles, Flame, Snowflake, Zap, Layers, Clock, ZapOff, Target, Lock, TreeDeciduous, Star, Swords } from 'lucide-react';
 import { useState } from 'react';
 import { ALL_RUNES, SKILLS } from '../data/runes';
 import type { Rune, Skill } from '../types/game';
+import { getTodaysChallenge, formatTime, getGoalDescription } from '../data/challenges';
+import { getChallengeRecord } from '../game/utils/storage';
 
 const MainMenu = () => {
-  const { scene, saveData, setShowTalentTree } = useGameStore();
+  const { scene, saveData, setShowTalentTree, setShowChallengeInfo } = useGameStore();
   const engine = getGameEngine();
   const [showCodex, setShowCodex] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  
+  const todaysChallenge = getTodaysChallenge();
+  const todaysRecord = getChallengeRecord(todaysChallenge.date);
   
   if (scene !== 'menu') return null;
   
@@ -323,6 +328,41 @@ const MainMenu = () => {
           <Play className="w-7 h-7" />
           开始冒险
         </button>
+        
+        <button
+          onClick={() => setShowChallengeInfo(true)}
+          className="w-full py-4 px-8 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold text-xl rounded-xl border-4 border-yellow-400 shadow-lg transition-all hover:scale-105 hover:shadow-yellow-500/30 flex items-center justify-center gap-3 relative"
+        >
+          <Star className="w-7 h-7" />
+          每日挑战
+          {!todaysRecord?.completed && (
+            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
+              !
+            </span>
+          )}
+        </button>
+        
+        {todaysChallenge && (
+          <div className="bg-gray-800/50 border border-yellow-600/50 rounded-lg p-3 text-xs">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-yellow-400 font-bold">今日目标</span>
+              <span className={todaysRecord?.completed ? 'text-green-400' : 'text-gray-400'}>
+                {todaysRecord?.completed ? '✓ 已完成' : '未完成'}
+              </span>
+            </div>
+            <div className="text-gray-300 flex items-center gap-1">
+              <Target className="w-3 h-3" />
+              {getGoalDescription(todaysChallenge.goalType)}
+            </div>
+            <div className="text-gray-400 flex items-center gap-1 mt-1">
+              <Clock className="w-3 h-3" />
+              限时 {formatTime(todaysChallenge.timeLimit)}
+              <span className="mx-1">·</span>
+              <Swords className="w-3 h-3" />
+              {todaysChallenge.monsterCount} 只敌人
+            </div>
+          </div>
+        )}
         
         <button
           onClick={handleOpenTalents}

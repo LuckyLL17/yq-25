@@ -183,6 +183,13 @@ export interface GameState {
   combineSlot2: Rune | null;
   camera: Position;
   earnedTalentPoints: number;
+  isChallengeMode: boolean;
+  challenge: DailyChallenge | null;
+  challengeTimeRemaining: number;
+  challengeTimeSpent: number;
+  challengeCompleted: boolean;
+  challengeFailed: boolean;
+  challengeDamageTaken: number;
 }
 
 export interface SaveData {
@@ -234,4 +241,63 @@ export interface TalentBranch {
   color: string;
   icon: string;
   description: string;
+}
+
+export type ChallengeGoalType = 'kill_all' | 'open_all_chests' | 'both';
+
+export interface DailyChallenge {
+  id: string;
+  date: string;
+  level: number;
+  timeLimit: number;
+  goalType: ChallengeGoalType;
+  requiredRuneIds: string[];
+  monsterCount: number;
+  chestCount: number;
+  dungeonSeed: number;
+  talentPointsReward: number;
+  badgeReward?: string;
+}
+
+export interface ChallengeRecord {
+  date: string;
+  completed: boolean;
+  timeSpent: number;
+  killCount: number;
+  chestsOpened: number;
+  bestTime?: number;
+}
+
+export interface Badge {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  requirement: string;
+}
+
+export interface ChallengeGameState {
+  isChallengeMode: boolean;
+  challenge: DailyChallenge | null;
+  timeRemaining: number;
+  totalKillsNeeded: number;
+  totalChestsNeeded: number;
+  challengeCompleted: boolean;
+  challengeFailed: boolean;
+}
+
+export interface SaveData {
+  highestLevel: number;
+  totalKills: number;
+  discoveredRunes: string[];
+  discoveredSkills: string[];
+  highScore: number;
+  talentPoints: number;
+  unlockedTalents: Record<string, number>;
+  badges: string[];
+  challengeHistory: Record<string, ChallengeRecord>;
+  bestChallengeTime?: number;
+  totalChallengesCompleted: number;
 }

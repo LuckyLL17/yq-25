@@ -1,8 +1,9 @@
 import { getGameEngine } from '../game/GameEngine';
 import { useGameStore } from '../store/gameStore';
-import { Heart, Skull, Swords, Map } from 'lucide-react';
+import { Heart, Skull, Swords, Map, Clock, Target, Package, Star } from 'lucide-react';
 import { SKILLS } from '../data/runes';
 import type { RuneElement } from '../types/game';
+import { formatTime } from '../data/challenges';
 
 const getElementColorClass = (element: RuneElement): string => {
   switch (element) {
@@ -14,12 +15,26 @@ const getElementColorClass = (element: RuneElement): string => {
 };
 
 const GameHUD = () => {
-  const { player, currentLevel, killCount, activeSkills } = useGameStore();
+  const { 
+    player, 
+    currentLevel, 
+    killCount, 
+    activeSkills, 
+    isChallengeMode, 
+    challenge, 
+    challengeTimeRemaining,
+    chests
+  } = useGameStore();
   const engine = getGameEngine();
   
   if (!player) return null;
   
   const hpPercent = (player.hp / player.maxHp) * 100;
+  const openedChests = chests.filter(c => c.opened).length;
+  
+  const isLowTime = isChallengeMode && challengeTimeRemaining < 30;
+  const totalMonsters = challenge?.monsterCount || 0;
+  const totalChests = challenge?.chestCount || 0;
   
   return (
     <div className="absolute top-0 left-0 right-0 p-4 pointer-events-none z-10">
@@ -40,16 +55,57 @@ const GameHUD = () => {
           </div>
         </div>
         
-        <div className="flex gap-3">
-          <div className="bg-gray-900/90 border-4 border-gray-700 px-4 py-2 rounded-lg flex items-center gap-2">
-            <Map className="w-5 h-5 text-purple-400" />
-            <span className="text-white font-bold font-mono">第 {currentLevel} 层</span>
+        <div className="flex flex-col gap-2 items-end">
+          {isChallengeMode && challenge && (
+            <div className={`bg-gray-900/90 border-4 px-4 py-2 rounded-lg flex items-center gap-3 ${
+              isLowTime ? 'border-red-500 animate-pulse' : 'border-yellow-500'
+            }`}>
+              <Star className={`w-5 h-5 ${isLowTime ? 'text-red-400' : 'text-yellow-400'}`} />
+              <div className="text-center">
+                <div className={`text-lg font-bold font-mono ${
+                  isLowTime ? 'text-red-400' : 'text-yellow-300'
+                }`}>
+                  {formatTime(challengeTimeRemaining)}
+                </div>
+                <div className="text-xs text-gray-400">挑战倒计时</div>
+              </div>
+            </div>
+          )}
+          
+          <div className="flex gap-3">
+            <div className="bg-gray-900/90 border-4 border-gray-700 px-4 py-2 rounded-lg flex items-center gap-2">
+              <Map className="w-5 h-5 text-purple-400" />
+              <span className="text-white font-bold font-mono">第 {currentLevel} 层</span>
+            </div>
+            
+            <div className="bg-gray-900/90 border-4 border-gray-700 px-4 py-2 rounded-lg flex items-center gap-2">
+              <Skull className="w-5 h-5 text-red-400" />
+              <span className="text-white font-bold font-mono">
+                {killCount}
+                {isChallengeMode && totalMonsters > 0 && (
+                  <span className="text-gray-500">/{totalMonsters}</span>
+                )}
+              </span>
+            </div>
+            
+            {isChallengeMode && totalChests > 0 && (
+              <div className="bg-gray-900/90 border-4 border-gray-700 px-4 py-2 rounded-lg flex items-center gap-2">
+                <Package className="w-5 h-5 text-yellow-400" />
+                <span className="text-white font-bold font-mono">
+                  {openedChests}/{totalChests}
+                </span>
+              </div>
+            )}
           </div>
           
-          <div className="bg-gray-900/90 border-4 border-gray-700 px-4 py-2 rounded-lg flex items-center gap-2">
-            <Skull className="w-5 h-5 text-red-400" />
-            <span className="text-white font-bold font-mono">{killCount}</span>
-          </div>
+          {isChallengeMode && challenge && (
+            <div className="bg-gray-900/70 border-2 border-gray-600 px-3 py-1 rounded text-xs text-gray-300 flex items-center gap-1">
+              <Target className="w-3 h-3 text-cyan-400" />
+              {challenge.goalType === 'kill_all' && '击杀全部敌人'}
+              {challenge.goalType === 'open_all_chests' && '打开所有宝箱'}
+              {challenge.goalType === 'both' && '击杀全部敌人并打开所有宝箱'}
+            </div>
+          )}
         </div>
       </div>
       

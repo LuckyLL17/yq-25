@@ -1,11 +1,11 @@
-import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest } from '../types/game';
+import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest, DailyChallenge } from '../types/game';
 import { GAME_CONFIG } from '../data/config';
 import { generateDungeon, generateMonsters, generateChests, getPlayerStartPosition, updateFOV, isWalkable } from './utils/dungeon';
 import { getRandomRunes, createSkill, ALL_RUNES, SKILLS } from '../data/runes';
 import { calculateTalentEffects } from '../data/talents';
 import { generateId, distance, clamp, normalize } from './utils/math';
 import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, getElementColor, getElementGlowColor } from './utils/pixel';
-import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData } from './utils/storage';
+import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, unlockBadge, getStreakDays } from './utils/storage';
 
 export class GameEngine {
   private canvas: HTMLCanvasElement | null = null;
@@ -64,6 +64,13 @@ export class GameEngine {
       combineSlot2: null,
       camera: { x: 0, y: 0 },
       earnedTalentPoints: 0,
+      isChallengeMode: false,
+      challenge: null,
+      challengeTimeRemaining: 0,
+      challengeTimeSpent: 0,
+      challengeCompleted: false,
+      challengeFailed: false,
+      challengeDamageTaken: 0,
     };
   }
   
@@ -115,6 +122,10 @@ export class GameEngine {
     this.checkChestCollision();
     this.checkStairsCollision();
     this.updateHpRegen(deltaTime);
+    
+    if (this.state.isChallengeMode && !this.state.challengeCompleted && !this.state.challengeFailed) {
+      this.updateChallenge(deltaTime);
+    }
     
     if (this.state.player.hp <= 0) {
       this.gameOver();
@@ -402,20 +413,22 @@ export class GameEngine {
     chest.opened = true;
     const rewardRunes: Rune[] = [];
     
-    for (const runeId of chest.rewardRuneIds) {
-      const rune = ALL_RUNES.find(r => r.id === runeId);
-      if (rune) {
-        const runeCopy = { ...rune };
-        this.state.runeInventory.push(runeCopy);
-        rewardRunes.push(runeCopy);
-        discoverRune(rune.id);
-        
-        this.addDamageNumber(
-          { x: chest.position.x, y: chest.position.y - 20 },
-          0,
-          rune.color,
-          false
-        );
+    if (!this.state.isChallengeMode) {
+      for (const runeId of chest.rewardRuneIds) {
+        const rune = ALL_RUNES.find(r => r.id === runeId);
+        if (rune) {
+          const runeCopy = { ...rune };
+          this.state.runeInventory.push(runeCopy);
+          rewardRunes.push(runeCopy);
+          discoverRune(rune.id);
+          
+          this.addDamageNumber(
+            { x: chest.position.x, y: chest.position.y - 20 },
+            0,
+            rune.color,
+            false
+          );
+        }
       }
     }
     
@@ -523,15 +536,209 @@ export class GameEngine {
   private gameOver() {
     this.state.scene = 'gameover';
     
-    const talentPointsEarned = Math.max(1, Math.floor(this.state.currentLevel / 2) + Math.floor(this.state.killCount / 10));
-    this.state.earnedTalentPoints = talentPointsEarned;
+    if (this.state.isChallengeMode && !this.state.challengeCompleted) {
+      this.failChallenge();
+    } else {
+      const talentPointsEarned = Math.max(1, Math.floor(this.state.currentLevel / 2) + Math.floor(this.state.killCount / 10));
+      this.state.earnedTalentPoints = talentPointsEarned;
+      
+      const saveData = addTalentPoints(talentPointsEarned);
+      
+      updateSaveData({
+        totalKills: saveData.totalKills + this.state.killCount,
+        highestLevel: Math.max(this.state.currentLevel, saveData.highestLevel),
+      });
+    }
     
-    const saveData = addTalentPoints(talentPointsEarned);
+    this.notifyStateChange();
+  }
+  
+  private updateChallenge(deltaTime: number) {
+    this.state.challengeTimeRemaining -= deltaTime / 1000;
+    this.state.challengeTimeSpent += deltaTime / 1000;
+    
+    if (this.state.challengeTimeRemaining <= 0) {
+      this.state.challengeTimeRemaining = 0;
+      this.failChallenge();
+      return;
+    }
+    
+    if (this.checkChallengeGoal()) {
+      this.completeChallenge();
+    }
+  }
+  
+  private checkChallengeGoal(): boolean {
+    if (!this.state.challenge) return false;
+    
+    const goalType = this.state.challenge.goalType;
+    const totalMonsters = this.state.challenge.monsterCount;
+    const totalChests = this.state.challenge.chestCount;
+    const killedMonsters = this.state.killCount;
+    const openedChests = this.state.chests.filter(c => c.opened).length;
+    
+    switch (goalType) {
+      case 'kill_all':
+        return killedMonsters >= totalMonsters;
+      case 'open_all_chests':
+        return openedChests >= totalChests;
+      case 'both':
+        return killedMonsters >= totalMonsters && openedChests >= totalChests;
+      default:
+        return false;
+    }
+  }
+  
+  private completeChallenge() {
+    if (!this.state.challenge) return;
+    
+    this.state.challengeCompleted = true;
+    this.state.scene = 'victory';
+    
+    const challenge = this.state.challenge;
+    const timeSpent = this.state.challengeTimeSpent;
+    const noDamage = this.state.challengeDamageTaken === 0;
+    const fastComplete = timeSpent <= 60;
+    
+    const basePoints = challenge.talentPointsReward;
+    const timeBonus = Math.max(0, Math.floor((challenge.timeLimit - timeSpent) / 10));
+    const totalPoints = basePoints + timeBonus;
+    
+    this.state.earnedTalentPoints = totalPoints;
+    
+    const saveData = addTalentPoints(totalPoints);
+    
+    saveChallengeRecord(challenge.date, {
+      date: challenge.date,
+      completed: true,
+      timeSpent,
+      killCount: this.state.killCount,
+      chestsOpened: this.state.chests.filter(c => c.opened).length,
+      bestTime: timeSpent,
+    });
+    
+    unlockBadge('badge_first_challenge');
+    
+    if (fastComplete) {
+      unlockBadge('badge_speed_runner');
+    }
+    
+    if (noDamage) {
+      unlockBadge('badge_perfect');
+    }
+    
+    if (challenge.goalType === 'both' || challenge.goalType === 'open_all_chests') {
+      unlockBadge('badge_collector');
+    }
+    
+    if (challenge.goalType === 'both' || challenge.goalType === 'kill_all') {
+      unlockBadge('badge_slayer');
+    }
+    
+    const streak = getStreakDays();
+    if (streak >= 7) {
+      unlockBadge('badge_week_streak');
+    }
+    
+    if (saveData.totalChallengesCompleted >= 30) {
+      unlockBadge('badge_master');
+    }
+    
+    if (challenge.badgeReward) {
+      unlockBadge(challenge.badgeReward);
+    }
     
     updateSaveData({
       totalKills: saveData.totalKills + this.state.killCount,
-      highestLevel: Math.max(this.state.currentLevel, saveData.highestLevel),
     });
+    
+    this.notifyStateChange();
+  }
+  
+  private failChallenge() {
+    if (!this.state.challenge) return;
+    
+    this.state.challengeFailed = true;
+    this.state.scene = 'gameover';
+    
+    saveChallengeRecord(this.state.challenge.date, {
+      date: this.state.challenge.date,
+      completed: false,
+      timeSpent: this.state.challengeTimeSpent,
+      killCount: this.state.killCount,
+      chestsOpened: this.state.chests.filter(c => c.opened).length,
+    });
+    
+    this.notifyStateChange();
+  }
+  
+  public startChallenge(challenge: DailyChallenge) {
+    const saveData = loadSaveData();
+    const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
+    
+    this.hpRegenTimer = 0;
+    
+    const challengeRunes = challenge.requiredRuneIds
+      .map(id => ALL_RUNES.find(r => r.id === id))
+      .filter((r): r is Rune => r !== undefined);
+    
+    const equipped: (Rune | null)[] = [null, null, null, null];
+    challengeRunes.forEach((rune, i) => {
+      if (i < 4) equipped[i] = rune;
+    });
+    
+    const dungeon = generateDungeon(challenge.level);
+    const monsters = generateMonsters(dungeon, challenge.level);
+    const chests = generateChests(dungeon, challenge.level);
+    
+    const adjustedMonsters = monsters.slice(0, challenge.monsterCount);
+    const adjustedChests = chests.slice(0, challenge.chestCount);
+    
+    const startPos = getPlayerStartPosition(dungeon);
+    
+    const fovRadius = GAME_CONFIG.FOV_RADIUS + talentEffects.fov;
+    const updatedDungeon = updateFOV(dungeon, startPos, fovRadius);
+    
+    const maxHp = GAME_CONFIG.PLAYER_MAX_HP + talentEffects.maxHp;
+    const speed = GAME_CONFIG.PLAYER_SPEED * (1 + talentEffects.speed);
+    
+    this.state.scene = 'playing';
+    this.state.dungeon = updatedDungeon;
+    this.state.monsters = adjustedMonsters;
+    this.state.chests = adjustedChests;
+    this.state.currentLevel = challenge.level;
+    this.state.killCount = 0;
+    this.state.gold = 0;
+    this.state.projectiles = [];
+    this.state.particles = [];
+    this.state.damageNumbers = [];
+    this.state.runeInventory = challengeRunes;
+    this.state.equippedRunes = equipped;
+    this.state.activeSkills = [];
+    this.state.earnedTalentPoints = 0;
+    this.state.isChallengeMode = true;
+    this.state.challenge = challenge;
+    this.state.challengeTimeRemaining = challenge.timeLimit;
+    this.state.challengeTimeSpent = 0;
+    this.state.challengeCompleted = false;
+    this.state.challengeFailed = false;
+    this.state.challengeDamageTaken = 0;
+    this.state.player = {
+      position: { ...startPos },
+      hp: maxHp,
+      maxHp: maxHp,
+      speed: speed,
+      direction: 1,
+      animFrame: 0,
+      animTimer: 0,
+      isMoving: false,
+      attackCooldown: 500,
+      currentAttackCooldown: 0,
+      invincible: 0,
+    };
+    
+    this.updateSkillsFromRunes();
+    challengeRunes.forEach(r => discoverRune(r.id));
     
     this.notifyStateChange();
   }
@@ -726,14 +933,16 @@ export class GameEngine {
     if (monster.hp <= 0) {
       this.state.killCount++;
       
-      const saveData = loadSaveData();
-      const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
-      const adjustedDropChance = monster.dropChance * (1 + talentEffects.runeDrop);
-      
-      if (Math.random() < adjustedDropChance) {
-        const rune = ALL_RUNES[Math.floor(Math.random() * ALL_RUNES.length)];
-        this.state.runeInventory.push({ ...rune });
-        discoverRune(rune.id);
+      if (!this.state.isChallengeMode) {
+        const saveData = loadSaveData();
+        const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
+        const adjustedDropChance = monster.dropChance * (1 + talentEffects.runeDrop);
+        
+        if (Math.random() < adjustedDropChance) {
+          const rune = ALL_RUNES[Math.floor(Math.random() * ALL_RUNES.length)];
+          this.state.runeInventory.push({ ...rune });
+          discoverRune(rune.id);
+        }
       }
       
       for (let i = 0; i < 10; i++) {
@@ -756,6 +965,10 @@ export class GameEngine {
     
     this.state.player.hp -= finalDamage;
     this.state.player.invincible = GAME_CONFIG.INVINCIBLE_DURATION;
+    
+    if (this.state.isChallengeMode) {
+      this.state.challengeDamageTaken += finalDamage;
+    }
     
     this.addDamageNumber(this.state.player.position, finalDamage, '#ff4757', false);
     

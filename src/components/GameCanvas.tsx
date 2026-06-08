@@ -45,7 +45,7 @@ const GameCanvas = () => {
   }, [engine]);
   
   useEffect(() => {
-    if (scene === 'playing' || scene === 'gameover') {
+    if (scene === 'playing' || scene === 'gameover' || scene === 'victory') {
       const state = engine.getState();
       updateFromEngine(state);
     }
