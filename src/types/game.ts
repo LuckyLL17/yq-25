@@ -81,12 +81,14 @@ export type AIType = 'passive' | 'aggressive' | 'patrol';
 export type PetType = 'fire_dragonling' | 'ice_sprite' | 'thunder_bird' | 'shadow_cat';
 
 export interface PetSkill {
+  id: string;
   name: string;
   damage: number;
   cooldown: number;
   currentCooldown: number;
   range: number;
   description: string;
+  icon: string;
 }
 
 export interface Pet {
@@ -194,6 +196,9 @@ export interface Player {
   attackCooldown: number;
   currentAttackCooldown: number;
   invincible: number;
+  shieldTimer: number;
+  damageBoostTimer: number;
+  damageBoostPercent: number;
 }
 
 export interface GameState {
@@ -239,6 +244,7 @@ export interface SaveData {
   unlockedTalents: Record<string, number>;
   unlockedPets: string[];
   selectedPet: string | null;
+  petSkills: Record<string, string>;
 }
 
 export type TalentEffectType = 
@@ -341,4 +347,5 @@ export interface SaveData {
   totalChallengesCompleted: number;
   unlockedPets: string[];
   selectedPet: string | null;
+  petSkills: Record<string, string>;
 }

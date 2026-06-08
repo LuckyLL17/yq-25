@@ -5,8 +5,8 @@ import { getRandomRunes, createSkill, ALL_RUNES, SKILLS } from '../data/runes';
 import { calculateTalentEffects } from '../data/talents';
 import { generateId, distance, clamp, normalize } from './utils/math';
 import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, drawPet, getElementColor, getElementGlowColor } from './utils/pixel';
-import { createPet } from '../data/pets';
-import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, getChallengeRecord, unlockBadge, getStreakDays } from './utils/storage';
+import { createPet, PET_SKILLS } from '../data/pets';
+import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, getChallengeRecord, unlockBadge, getStreakDays, getPetSkill } from './utils/storage';
 
 export class GameEngine {
   private canvas: HTMLCanvasElement | null = null;
@@ -47,6 +47,9 @@ export class GameEngine {
         attackCooldown: 500,
         currentAttackCooldown: 0,
         invincible: 0,
+        shieldTimer: 0,
+        damageBoostTimer: 0,
+        damageBoostPercent: 0,
       },
       dungeon: null,
       monsters: [],
@@ -175,6 +178,16 @@ export class GameEngine {
     
     if (player.invincible > 0) {
       player.invincible -= deltaTime;
+    }
+    
+    if (player.shieldTimer > 0) {
+      player.shieldTimer -= deltaTime;
+    }
+    if (player.damageBoostTimer > 0) {
+      player.damageBoostTimer -= deltaTime;
+      if (player.damageBoostTimer <= 0) {
+        player.damageBoostPercent = 0;
+      }
     }
     
     if (this.state.dungeon) {
@@ -461,50 +474,35 @@ export class GameEngine {
   
   private petUseSkill(pet: Pet, target: Monster) {
     const skill = pet.skill;
+    const petElement = this.getPetElement(pet.type);
+    const skillTemplate = PET_SKILLS[pet.type as keyof typeof PET_SKILLS]?.find(s => s.id === skill.id);
+    const skillType = skillTemplate?.type || 'single';
     
-    switch (pet.type) {
-      case 'fire_dragonling': {
+    switch (skillType) {
+      case 'aoe': {
         for (let i = 0; i < 20; i++) {
           const angle = (Math.PI * 2 * i) / 20;
+          const centerX = skill.id.includes('blade') ? pet.position.x : target.position.x;
+          const centerY = skill.id.includes('blade') ? pet.position.y : target.position.y;
           this.addParticle(
-            target.position.x + Math.cos(angle) * skill.range * 0.3,
-            target.position.y + Math.sin(angle) * skill.range * 0.3,
-            '#ff6b35',
+            centerX + Math.cos(angle) * skill.range * 0.4,
+            centerY + Math.sin(angle) * skill.range * 0.4,
+            pet.color,
             'explosion'
           );
         }
+        const centerPos = skill.id.includes('blade') ? pet.position : target.position;
         for (const monster of this.state.monsters) {
           if (monster.hp <= 0) continue;
-          const dist = distance(target.position, monster.position);
+          const dist = distance(centerPos, monster.position);
           if (dist < skill.range * 0.5) {
-            this.damageMonster(monster, skill.damage, 'fire', 'spread');
+            this.damageMonster(monster, skill.damage, petElement as any, 'spread');
           }
         }
         break;
       }
         
-      case 'ice_sprite': {
-        for (let i = 0; i < 25; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const dist = Math.random() * skill.range * 0.5;
-          this.addParticle(
-            pet.position.x + Math.cos(angle) * dist,
-            pet.position.y + Math.sin(angle) * dist,
-            '#4ecdc4',
-            'magic'
-          );
-        }
-        for (const monster of this.state.monsters) {
-          if (monster.hp <= 0) continue;
-          const dist = distance(pet.position, monster.position);
-          if (dist < skill.range * 0.5) {
-            this.damageMonster(monster, skill.damage, 'ice', 'time');
-          }
-        }
-        break;
-      }
-        
-      case 'thunder_bird': {
+      case 'chain': {
         const chainTargets: Monster[] = [target];
         let lastTarget = target;
         
@@ -529,13 +527,13 @@ export class GameEngine {
         }
         
         for (const monster of chainTargets) {
-          this.damageMonster(monster, skill.damage, 'thunder', 'power');
+          this.damageMonster(monster, skill.damage, petElement as any, 'power');
           
           for (let j = 0; j < 8; j++) {
             this.addParticle(
               monster.position.x + (Math.random() - 0.5) * 15,
               monster.position.y + (Math.random() - 0.5) * 15,
-              '#ffe66d',
+              pet.color,
               'spark'
             );
           }
@@ -543,18 +541,18 @@ export class GameEngine {
         break;
       }
         
-      case 'shadow_cat': {
+      case 'dash': {
         const oldPos = { ...pet.position };
         pet.position.x = target.position.x + (target.position.x > pet.position.x ? -20 : 20);
         pet.position.y = target.position.y;
         
-        this.damageMonster(target, skill.damage, 'thunder', 'power', true);
+        this.damageMonster(target, skill.damage, petElement as any, 'power', true);
         
         for (let i = 0; i < 12; i++) {
           this.addParticle(
             oldPos.x + (Math.random() - 0.5) * 10,
             oldPos.y + (Math.random() - 0.5) * 10,
-            '#a29bfe',
+            pet.color,
             'magic'
           );
         }
@@ -562,10 +560,79 @@ export class GameEngine {
           this.addParticle(
             pet.position.x + (Math.random() - 0.5) * 10,
             pet.position.y + (Math.random() - 0.5) * 10,
-            '#a29bfe',
+            pet.color,
             'magic'
           );
         }
+        break;
+      }
+      
+      case 'single': {
+        this.damageMonster(target, skill.damage, petElement as any, 'power', true);
+        
+        for (let i = 0; i < 15; i++) {
+          this.addParticle(
+            target.position.x + (Math.random() - 0.5) * 25,
+            target.position.y + (Math.random() - 0.5) * 25,
+            pet.color,
+            'explosion'
+          );
+        }
+        break;
+      }
+      
+      case 'shield': {
+        this.state.player.shieldTimer = 5000;
+        
+        for (let i = 0; i < 20; i++) {
+          const angle = (Math.PI * 2 * i) / 20;
+          this.addParticle(
+            this.state.player.position.x + Math.cos(angle) * 25,
+            this.state.player.position.y + Math.sin(angle) * 25,
+            pet.color,
+            'magic'
+          );
+        }
+        
+        this.addDamageNumber(this.state.player.position, 0, pet.color, false);
+        break;
+      }
+      
+      case 'heal': {
+        const healAmount = Math.floor(this.state.player.maxHp * 0.2);
+        const oldHp = this.state.player.hp;
+        this.state.player.hp = Math.min(this.state.player.maxHp, this.state.player.hp + healAmount);
+        const actualHeal = this.state.player.hp - oldHp;
+        
+        if (actualHeal > 0) {
+          this.addDamageNumber(this.state.player.position, actualHeal, '#7bed9f', false);
+        }
+        
+        for (let i = 0; i < 15; i++) {
+          this.addParticle(
+            this.state.player.position.x + (Math.random() - 0.5) * 20,
+            this.state.player.position.y - 10 + (Math.random() - 0.5) * 20,
+            '#7bed9f',
+            'magic'
+          );
+        }
+        break;
+      }
+      
+      case 'buff': {
+        this.state.player.damageBoostPercent = 50;
+        this.state.player.damageBoostTimer = 8000;
+        
+        for (let i = 0; i < 20; i++) {
+          this.addParticle(
+            this.state.player.position.x + (Math.random() - 0.5) * 30,
+            this.state.player.position.y + (Math.random() - 0.5) * 30,
+            pet.color,
+            'spark'
+          );
+        }
+        
+        this.addDamageNumber(this.state.player.position, 0, pet.color, false);
         break;
       }
     }
@@ -888,10 +955,14 @@ export class GameEngine {
       attackCooldown: 500,
       currentAttackCooldown: 0,
       invincible: 0,
+      shieldTimer: 0,
+      damageBoostTimer: 0,
+      damageBoostPercent: 0,
     };
     
     const selectedPetType = saveData.selectedPet || 'fire_dragonling';
-    const pet = createPet(selectedPetType as any, { x: startPos.x - 30, y: startPos.y + 20 });
+    const savedSkillId = getPetSkill(selectedPetType);
+    const pet = createPet(selectedPetType as any, { x: startPos.x - 30, y: startPos.y + 20 }, savedSkillId || undefined);
     this.state.pet = pet;
     
     this.updateSkillsFromRunes();
@@ -1128,11 +1199,15 @@ export class GameEngine {
       attackCooldown: 500,
       currentAttackCooldown: 0,
       invincible: 0,
+      shieldTimer: 0,
+      damageBoostTimer: 0,
+      damageBoostPercent: 0,
     };
     
     const challengeSaveData = loadSaveData();
     const challengePetType = challengeSaveData.selectedPet || 'fire_dragonling';
-    const challengePet = createPet(challengePetType as any, { x: startPos.x - 30, y: startPos.y + 20 });
+    const challengeSavedSkillId = getPetSkill(challengePetType);
+    const challengePet = createPet(challengePetType as any, { x: startPos.x - 30, y: startPos.y + 20 }, challengeSavedSkillId || undefined);
     this.state.pet = challengePet;
     
     this.updateSkillsFromRunes();
@@ -1359,7 +1434,11 @@ export class GameEngine {
     
     const saveData = loadSaveData();
     const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
-    const finalDamage = Math.max(1, Math.floor(damage * (1 - talentEffects.damageReduction)));
+    let finalDamage = Math.max(1, Math.floor(damage * (1 - talentEffects.damageReduction)));
+    
+    if (this.state.player.shieldTimer > 0) {
+      finalDamage = Math.max(1, Math.floor(finalDamage * 0.5));
+    }
     
     this.state.player.hp -= finalDamage;
     this.state.player.invincible = GAME_CONFIG.INVINCIBLE_DURATION;

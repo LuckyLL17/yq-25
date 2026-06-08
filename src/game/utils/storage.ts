@@ -15,6 +15,7 @@ const defaultSaveData: SaveData = {
   totalChallengesCompleted: 0,
   unlockedPets: ['fire_dragonling'],
   selectedPet: 'fire_dragonling',
+  petSkills: {},
 };
 
 export const loadSaveData = (): SaveData => {
@@ -172,4 +173,19 @@ export const hasPet = (petType: string): boolean => {
 export const getSelectedPet = (): string | null => {
   const data = loadSaveData();
   return data.selectedPet;
+};
+
+export const setPetSkill = (petType: string, skillId: string): SaveData => {
+  const data = loadSaveData();
+  data.petSkills = {
+    ...data.petSkills,
+    [petType]: skillId,
+  };
+  saveSaveData(data);
+  return data;
+};
+
+export const getPetSkill = (petType: string): string | null => {
+  const data = loadSaveData();
+  return data.petSkills[petType] || null;
 };
