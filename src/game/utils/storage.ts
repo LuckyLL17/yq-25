@@ -8,7 +8,7 @@ const defaultSaveData: SaveData = {
   discoveredRunes: [],
   discoveredSkills: [],
   highScore: 0,
-  talentPoints: 0,
+  talentPoints: 100,
   unlockedTalents: {},
   badges: [],
   challengeHistory: {},
