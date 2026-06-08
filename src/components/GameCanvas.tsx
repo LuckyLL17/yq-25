@@ -4,12 +4,13 @@ import { useGameStore } from '../store/gameStore';
 import GameHUD from './GameHUD';
 import RunePanel from './RunePanel';
 import DeathScreen from './DeathScreen';
+import ShopPanel from './ShopPanel';
 import { GAME_CONFIG } from '../data/config';
 
 const GameCanvas = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { scene, updateFromEngine } = useGameStore();
+  const { scene, updateFromEngine, setShowShopPanel, setCurrentShop } = useGameStore();
   const engine = getGameEngine();
   
   useEffect(() => {
@@ -34,6 +35,11 @@ const GameCanvas = () => {
       engine.handleKeyUp(e.key);
     };
     
+    engine.onShopOpen = (shop) => {
+      setCurrentShop(shop);
+      setShowShopPanel(true);
+    };
+    
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     
@@ -42,7 +48,7 @@ const GameCanvas = () => {
       window.removeEventListener('keyup', handleKeyUp);
       engine.stop();
     };
-  }, [engine]);
+  }, [engine, setShowShopPanel, setCurrentShop]);
   
   useEffect(() => {
     if (scene === 'playing' || scene === 'gameover' || scene === 'victory') {
@@ -71,6 +77,7 @@ const GameCanvas = () => {
       <GameHUD />
       <RunePanel />
       <DeathScreen />
+      <ShopPanel />
       
       {scene === 'playing' && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">

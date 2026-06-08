@@ -32,6 +32,25 @@ export interface Room {
   centerY: number;
 }
 
+export type ShopItemType = 'rune' | 'equipment' | 'potion';
+
+export interface ShopItem {
+  id: string;
+  type: ShopItemType;
+  item: Rune | Equipment | Potion;
+  price: number;
+  sold: boolean;
+}
+
+export interface Shop {
+  id: string;
+  position: Position;
+  roomIndex: number;
+  items: ShopItem[];
+  shopkeeperName: string;
+  shopkeeperDialogue: string[];
+}
+
 export interface Dungeon {
   tiles: Tile[][];
   rooms: Room[];
@@ -39,6 +58,7 @@ export interface Dungeon {
   height: number;
   level: number;
   stairsPosition: Position;
+  shop: Shop | null;
 }
 
 export type GameScene = 'menu' | 'playing' | 'gameover' | 'victory' | 'codex';

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { GameScene, Rune, Skill, Player, Monster, Chest, SaveData, DailyChallenge, Equipment, EquipmentSlotType, Potion, PotionMaterial } from '../types/game';
+import type { GameScene, Rune, Skill, Player, Monster, Chest, SaveData, DailyChallenge, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, Pet } from '../types/game';
 import { loadSaveData, unlockTalent as saveUnlockTalent, saveEquipment, savePotions } from '../game/utils/storage';
 import { getTalentCost, canUnlockTalent } from '../data/talents';
 import { upgradeEquipment as upgradeEquip, getUpgradeCost, getEquipmentTemplate, generateShopEquipment, getBuyPrice, getSellPrice } from '../data/equipment';
@@ -78,6 +78,9 @@ interface GameStore {
   potionCooldowns: Record<string, number>;
   potionBuffTimers: Record<string, number>;
   showPotionPanel: boolean;
+  showShopPanel: boolean;
+  currentShop: Shop | null;
+  pet: Pet | null;
   
   setScene: (scene: GameScene) => void;
   setPlayer: (player: Player) => void;
@@ -116,6 +119,9 @@ interface GameStore {
   craftPotion: (potionTemplateId: string) => boolean;
   setPotionInventory: (potions: Potion[]) => void;
   setMaterialInventory: (materials: PotionMaterial[]) => void;
+  setShowShopPanel: (show: boolean) => void;
+  setCurrentShop: (shop: Shop | null) => void;
+  buyShopItem: (itemId: string) => boolean;
 }
 
 export const useGameStore = create<GameStore>((set, get) => {
@@ -164,6 +170,9 @@ export const useGameStore = create<GameStore>((set, get) => {
     potionCooldowns: {},
     potionBuffTimers: {},
     showPotionPanel: false,
+    showShopPanel: false,
+    currentShop: null,
+    pet: null,
   
   setScene: (scene) => set({ scene }),
   setPlayer: (player) => set({ player }),
@@ -186,6 +195,8 @@ export const useGameStore = create<GameStore>((set, get) => {
   setShowPotionPanel: (showPotionPanel) => set({ showPotionPanel }),
   setPotionInventory: (potionInventory) => set({ potionInventory }),
   setMaterialInventory: (materialInventory) => set({ materialInventory }),
+  setShowShopPanel: (showShopPanel) => set({ showShopPanel }),
+  setCurrentShop: (currentShop) => set({ currentShop }),
   setDraggedRune: (draggedRune) => set({ draggedRune }),
   
   addToast: (toast) => {
@@ -265,6 +276,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       materialInventory: state.materialInventory || [],
       potionCooldowns: state.potionCooldowns || {},
       potionBuffTimers: state.potionBuffTimers || {},
+      pet: state.pet || null,
     });
     
     if (state.scene === 'gameover' || state.scene === 'victory') {
@@ -511,6 +523,20 @@ export const useGameStore = create<GameStore>((set, get) => {
           color: template.color,
         });
       }
+    }
+    
+    return success;
+  },
+
+  buyShopItem: (itemId: string): boolean => {
+    const { getGameEngine } = require('../game/GameEngine');
+    const engine = getGameEngine();
+    if (!engine) return false;
+    
+    const success = engine.buyShopItem(itemId);
+    
+    if (success) {
+      set({ saveData: loadSaveData() });
     }
     
     return success;

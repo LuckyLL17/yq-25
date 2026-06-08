@@ -436,3 +436,73 @@ export const drawRuneIcon = (
   ctx.closePath();
   ctx.stroke();
 };
+
+export const drawShopkeeper = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  direction: number = 1,
+  animFrame: number = 0,
+  scale: number = 3
+) => {
+  const s = scale;
+  const px = Math.floor(x - 10 * s);
+  const py = Math.floor(y - 12 * s);
+  const bounce = animFrame % 2 === 0 ? 0 : -s;
+
+  ctx.fillStyle = '#6c5ce7';
+  ctx.fillRect(px + 4 * s, py + 8 * s + bounce, 12 * s, 12 * s);
+
+  ctx.fillStyle = '#a29bfe';
+  ctx.fillRect(px + 5 * s, py + 9 * s + bounce, 10 * s, 3 * s);
+
+  ctx.fillStyle = '#ffeaa7';
+  ctx.fillRect(px + 5 * s, py + 3 * s + bounce, 10 * s, 6 * s);
+
+  ctx.fillStyle = '#6c5ce7';
+  ctx.fillRect(px + 4 * s, py + 1 * s + bounce, 12 * s, 3 * s);
+  ctx.fillRect(px + 6 * s, py + 0 * s + bounce, 8 * s, s);
+  ctx.fillRect(px + 8 * s, py - 1 * s + bounce, 4 * s, s);
+
+  ctx.fillStyle = '#ffd93d';
+  ctx.fillRect(px + 8 * s, py - 2 * s + bounce, 4 * s, 2 * s);
+  ctx.fillRect(px + 9 * s, py - 3 * s + bounce, 2 * s, s);
+
+  const eyeOffset = direction < 0 ? -s : s;
+  ctx.fillStyle = '#2d3436';
+  ctx.fillRect(px + 6 * s + eyeOffset, py + 5 * s + bounce, 2 * s, 2 * s);
+  ctx.fillRect(px + 10 * s + eyeOffset, py + 5 * s + bounce, 2 * s, 2 * s);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(px + 6 * s + eyeOffset, py + 5 * s + bounce, s, s);
+  ctx.fillRect(px + 10 * s + eyeOffset, py + 5 * s + bounce, s, s);
+
+  ctx.fillStyle = '#e17055';
+  ctx.fillRect(px + 8 * s, py + 7 * s + bounce, 4 * s, 2 * s);
+
+  ctx.fillStyle = '#d63031';
+  ctx.fillRect(px + 9 * s, py + 7 * s + bounce, 2 * s, s);
+
+  ctx.fillStyle = '#ffeaa7';
+  const armSwing = animFrame % 2 === 0 ? 0 : s;
+  ctx.fillRect(px + 2 * s, py + 9 * s + bounce + armSwing, 3 * s, 6 * s);
+  ctx.fillRect(px + 15 * s, py + 9 * s + bounce - armSwing, 3 * s, 6 * s);
+
+  ctx.fillStyle = '#fdcb6e';
+  ctx.fillRect(px + 1 * s, py + 14 * s + bounce + armSwing, 4 * s, 2 * s);
+  ctx.fillRect(px + 15 * s, py + 14 * s + bounce - armSwing, 4 * s, 2 * s);
+
+  ctx.fillStyle = '#0984e3';
+  ctx.fillRect(px + 5 * s, py + 20 * s, 4 * s, 3 * s);
+  ctx.fillRect(px + 11 * s, py + 20 * s, 4 * s, 3 * s);
+
+  ctx.fillStyle = '#2d3436';
+  ctx.fillRect(px + 4 * s, py + 22 * s, 6 * s, 2 * s);
+  ctx.fillRect(px + 10 * s, py + 22 * s, 6 * s, 2 * s);
+
+  ctx.fillStyle = '#ffd700';
+  ctx.fillRect(px + 7 * s, py + 12 * s + bounce, 6 * s, 6 * s);
+  ctx.fillStyle = '#ff6b35';
+  ctx.fillRect(px + 9 * s, py + 13 * s + bounce, 2 * s, 4 * s);
+  ctx.fillRect(px + 8 * s, py + 14 * s + bounce, 4 * s, 2 * s);
+};

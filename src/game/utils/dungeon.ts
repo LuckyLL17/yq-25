@@ -1,8 +1,9 @@
-import type { Dungeon, Tile, Room, Position, Chest, Monster } from '../../types/game';
+import type { Dungeon, Tile, Room, Position, Chest, Monster, Shop } from '../../types/game';
 import { GAME_CONFIG } from '../../data/config';
 import { randomInt, randomRange } from './math';
 import { createMonster, getRandomMonsterType } from '../../data/monsters';
 import { getRandomRune } from '../../data/runes';
+import { createShop, SHOP_SPAWN_CHANCE } from '../../data/shop';
 
 let chestIdCounter = 0;
 
@@ -129,6 +130,14 @@ export const generateDungeon = (level: number): Dungeon => {
   };
   tiles[lastRoom.centerY][lastRoom.centerX].type = 'stairs';
   
+  let shop: Shop | null = null;
+  if (rooms.length >= 3 && Math.random() < SHOP_SPAWN_CHANCE) {
+    const shopRoomIndex = Math.max(1, Math.floor(rooms.length / 2));
+    const shopRoom = rooms[shopRoomIndex];
+    const shopTilePos = { x: shopRoom.centerX, y: shopRoom.centerY };
+    shop = createShop(level, shopTilePos, shopRoomIndex);
+  }
+  
   return {
     tiles,
     rooms,
@@ -136,6 +145,7 @@ export const generateDungeon = (level: number): Dungeon => {
     height,
     level,
     stairsPosition,
+    shop,
   };
 };
 

@@ -1,10 +1,10 @@
-import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType, Potion, PotionMaterial } from '../types/game';
+import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, ShopItem } from '../types/game';
 import { GAME_CONFIG } from '../data/config';
 import { generateDungeon, generateMonsters, generateChests, getPlayerStartPosition, updateFOV, isWalkable } from './utils/dungeon';
 import { getRandomRunes, createSkill, ALL_RUNES, SKILLS } from '../data/runes';
 import { calculateTalentEffects } from '../data/talents';
 import { generateId, distance, clamp, normalize } from './utils/math';
-import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, drawPet, getElementColor, getElementGlowColor } from './utils/pixel';
+import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, drawPet, getElementColor, getElementGlowColor, drawShopkeeper } from './utils/pixel';
 import { createPet, PET_SKILLS } from '../data/pets';
 import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, getChallengeRecord, unlockBadge, getStreakDays, getPetSkill, discoverEquipment, saveEquipment, savePotions, discoverPotion, discoverMaterial } from './utils/storage';
 import { getRandomEquipment, getEquipmentTemplate } from '../data/equipment';
@@ -21,7 +21,8 @@ export class GameEngine {
   
   public state: GameState;
   public onStateChange: (() => void) | null = null;
-  public onChestOpened: ((rewards: { runes: Rune[]; equipment?: Equipment[]; potions: Potion[]; materials: Material[] }) => void) | null = null;
+  public onChestOpened: ((rewards: { runes: Rune[]; equipment?: Equipment[]; potions: Potion[]; materials: PotionMaterial[] }) => void) | null = null;
+  public onShopOpen: ((shop: Shop) => void) | null = null;
   
   constructor() {
     this.state = this.createInitialState();
@@ -143,6 +144,7 @@ export class GameEngine {
     this.updatePotionBuffs(deltaTime);
     this.updateCamera();
     this.checkChestCollision();
+    this.checkShopCollision();
     this.checkStairsCollision();
     this.updateHpRegen(deltaTime);
     
@@ -929,6 +931,21 @@ export class GameEngine {
     }
   }
   
+  private checkShopCollision() {
+    if (!this.state.dungeon || !this.state.dungeon.shop) return;
+    
+    const player = this.state.player;
+    const shop = this.state.dungeon.shop;
+    
+    const dist = distance(player.position, shop.position);
+    if (dist < 40 && this.keys.has(' ')) {
+      this.keys.delete(' ');
+      if (this.onShopOpen) {
+        this.onShopOpen(shop);
+      }
+    }
+  }
+  
   private checkStairsCollision() {
     if (!this.state.dungeon) return;
     
@@ -1653,6 +1670,43 @@ export class GameEngine {
     return this.state.potionCooldowns[potionTemplateId] || 0;
   }
   
+  public buyShopItem(itemId: string): boolean {
+    if (!this.state.dungeon || !this.state.dungeon.shop) return false;
+    
+    const shop = this.state.dungeon.shop;
+    const shopItem = shop.items.find(item => item.id === itemId);
+    
+    if (!shopItem || shopItem.sold) return false;
+    
+    const saveData = loadSaveData();
+    if (saveData.talentPoints < shopItem.price) return false;
+    
+    if (shopItem.type === 'rune') {
+      const rune = shopItem.item as Rune;
+      this.state.runeInventory.push({ ...rune });
+      discoverRune(rune.id);
+    } else if (shopItem.type === 'equipment') {
+      const equipment = shopItem.item as Equipment;
+      this.state.equipmentInventory.push({ ...equipment });
+      discoverEquipment(equipment.templateId);
+      saveEquipment(this.state.equipmentInventory, this.state.equippedEquipment);
+    } else if (shopItem.type === 'potion') {
+      const potion = shopItem.item as Potion;
+      this.state.potionInventory.push({ ...potion });
+      discoverPotion(potion.templateId);
+      savePotions(this.state.potionInventory, this.state.materialInventory);
+    }
+    
+    const newTalentPoints = saveData.talentPoints - shopItem.price;
+    const newSaveData = { ...saveData, talentPoints: newTalentPoints };
+    updateSaveData(newSaveData);
+    
+    shopItem.sold = true;
+    
+    this.notifyStateChange();
+    return true;
+  }
+  
   private addMaterialDrop(level: number): PotionMaterial | null {
     const dropChance = 0.3 + level * 0.03;
     
@@ -2150,6 +2204,43 @@ export class GameEngine {
         this.state.dungeon.tiles[tileY][tileX].visible
       ) {
         drawChest(ctx, screenX, screenY, chest.opened, 2);
+      }
+    }
+    
+    const shop = this.state.dungeon.shop;
+    if (shop) {
+      const shopScreenX = shop.position.x - cam.x;
+      const shopScreenY = shop.position.y - cam.y;
+      
+      const shopTileX = Math.floor(shop.position.x / tileSize);
+      const shopTileY = Math.floor(shop.position.y / tileSize);
+      
+      if (
+        shopTileX >= 0 && shopTileX < this.state.dungeon.width &&
+        shopTileY >= 0 && shopTileY < this.state.dungeon.height &&
+        this.state.dungeon.tiles[shopTileY][shopTileX].visible
+      ) {
+        const animFrame = Math.floor(Date.now() / 500) % 2;
+        drawShopkeeper(ctx, shopScreenX, shopScreenY, 1, animFrame, 2);
+        
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(shopScreenX - 30, shopScreenY - 50, 60, 16);
+        ctx.fillStyle = '#ffd700';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('商店', shopScreenX, shopScreenY - 38);
+        
+        const distToPlayer = distance(this.state.player.position, shop.position);
+        if (distToPlayer < 50) {
+          const promptY = shopScreenY - 68;
+          const bounce = Math.sin(Date.now() / 200) * 2;
+          
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+          ctx.fillRect(shopScreenX - 50, promptY + bounce - 10, 100, 20);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 10px monospace';
+          ctx.fillText('按空格进入', shopScreenX, promptY + bounce + 4);
+        }
       }
     }
     
