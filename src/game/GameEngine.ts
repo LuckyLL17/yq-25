@@ -1,8 +1,9 @@
-import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, ShopItem } from '../types/game';
+import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, ShopItem, ClassType, PlayerClass } from '../types/game';
 import { GAME_CONFIG } from '../data/config';
 import { generateDungeon, generateMonsters, generateChests, getPlayerStartPosition, updateFOV, isWalkable } from './utils/dungeon';
-import { getRandomRunes, createSkill, ALL_RUNES, SKILLS } from '../data/runes';
+import { getRandomRunes, createSkill, ALL_RUNES, SKILLS, getRuneById } from '../data/runes';
 import { calculateTalentEffects } from '../data/talents';
+import { getClassById, getClassStartingRunes } from '../data/classes';
 import { generateId, distance, clamp, normalize } from './utils/math';
 import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, drawPet, getElementColor, getElementGlowColor, drawShopkeeper } from './utils/pixel';
 import { createPet, PET_SKILLS } from '../data/pets';
@@ -53,7 +54,9 @@ export class GameEngine {
         shieldTimer: 0,
         damageBoostTimer: 0,
         damageBoostPercent: 0,
+        classType: null,
       },
+      selectedClass: null,
       dungeon: null,
       monsters: [],
       chests: [],
@@ -846,6 +849,44 @@ export class GameEngine {
     }
   }
   
+  private getClassStats() {
+    const classType = this.state.player.classType;
+    if (!classType) {
+      return {
+        attack: 1.0,
+        defense: 1.0,
+        maxHp: 0,
+        speed: 0,
+        critChance: 0,
+        critDamage: 0,
+        attackSpeed: 1.0,
+      };
+    }
+    
+    const playerClass = getClassById(classType);
+    if (!playerClass) {
+      return {
+        attack: 1.0,
+        defense: 1.0,
+        maxHp: 0,
+        speed: 0,
+        critChance: 0,
+        critDamage: 0,
+        attackSpeed: 1.0,
+      };
+    }
+    
+    return {
+      attack: playerClass.stats.attack,
+      defense: playerClass.stats.defense,
+      maxHp: 0,
+      speed: 0,
+      critChance: playerClass.stats.critChance,
+      critDamage: playerClass.stats.critDamage - 1,
+      attackSpeed: playerClass.stats.attackSpeed,
+    };
+  }
+
   private getEquipmentStats() {
     const stats = {
       attack: 0,
@@ -1099,16 +1140,37 @@ export class GameEngine {
     this.notifyStateChange();
   }
   
+  public setScene(scene: string) {
+    this.state.scene = scene as any;
+    this.notifyStateChange();
+  }
+
   public startGame() {
+    this.startGameWithClass('fire_mage');
+  }
+
+  public startGameWithClass(classId: ClassType) {
+    const playerClass = getClassById(classId);
+    if (!playerClass) return;
+
     const saveData = loadSaveData();
     const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
     
     this.hpRegenTimer = 0;
     
+    const startingRuneIds = getClassStartingRunes(classId);
+    const initialRunes = startingRuneIds
+      .map(id => getRuneById(id))
+      .filter((r): r is Rune => r !== undefined);
+
     const baseRuneCount = 4 + talentEffects.startRunes;
-    const initialRunes = getRandomRunes(Math.max(4, Math.min(baseRuneCount, 8)));
-    const equipped: (Rune | null)[] = [null, null, null, null];
+    const bonusRuneCount = Math.max(0, baseRuneCount - initialRunes.length);
+    if (bonusRuneCount > 0) {
+      const bonusRunes = getRandomRunes(bonusRuneCount);
+      initialRunes.push(...bonusRunes);
+    }
     
+    const equipped: (Rune | null)[] = [null, null, null, null];
     initialRunes.forEach((rune, i) => {
       if (i < 4) equipped[i] = rune;
     });
@@ -1123,10 +1185,13 @@ export class GameEngine {
     
     const equipmentStats = this.calculateEquipmentStatsFromSave(saveData);
     
-    const maxHp = GAME_CONFIG.PLAYER_MAX_HP + talentEffects.maxHp + equipmentStats.maxHp;
-    const speed = GAME_CONFIG.PLAYER_SPEED * (1 + talentEffects.speed + equipmentStats.speed);
+    const classStats = playerClass.stats;
+    const maxHp = classStats.maxHp + talentEffects.maxHp + equipmentStats.maxHp;
+    const speed = classStats.speed * (1 + talentEffects.speed + equipmentStats.speed);
+    const attackCooldown = 500 / classStats.attackSpeed;
     
     this.state.scene = 'playing';
+    this.state.selectedClass = classId;
     this.state.dungeon = updatedDungeon;
     this.state.monsters = monsters;
     this.state.chests = chests;
@@ -1151,12 +1216,13 @@ export class GameEngine {
       animFrame: 0,
       animTimer: 0,
       isMoving: false,
-      attackCooldown: 500,
+      attackCooldown: attackCooldown,
       currentAttackCooldown: 0,
       invincible: 0,
       shieldTimer: 0,
       damageBoostTimer: 0,
       damageBoostPercent: 0,
+      classType: classId,
     };
     
     const selectedPetType = saveData.selectedPet || 'fire_dragonling';
@@ -1870,15 +1936,16 @@ export class GameEngine {
     const saveData = loadSaveData();
     const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
     const equipmentStats = this.getEquipmentStats();
+    const classStats = this.getClassStats();
     
     let finalDamage = damage;
     let actuallyCrit = isCrit;
     
-    const baseDamageMultiplier = 1 + talentEffects.damage + (equipmentStats.attack / 100);
+    const baseDamageMultiplier = classStats.attack * (1 + talentEffects.damage + (equipmentStats.attack / 100));
     finalDamage = Math.floor(finalDamage * baseDamageMultiplier);
     
-    const totalCritChance = talentEffects.critChance + equipmentStats.critChance;
-    const totalCritDamage = talentEffects.critDamage + equipmentStats.critDamage;
+    const totalCritChance = classStats.critChance + talentEffects.critChance + equipmentStats.critChance;
+    const totalCritDamage = classStats.critDamage + talentEffects.critDamage + equipmentStats.critDamage;
     
     if (!isCrit && totalCritChance > 0) {
       if (Math.random() < totalCritChance) {
@@ -1998,11 +2065,14 @@ export class GameEngine {
     const saveData = loadSaveData();
     const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
     const equipmentStats = this.getEquipmentStats();
+    const classStats = this.getClassStats();
     
     let finalDamage = damage;
     
-    const defenseReduction = Math.min(0.8, equipmentStats.defense / 100);
-    finalDamage = Math.floor(finalDamage * (1 - defenseReduction));
+    const classDefenseReduction = Math.min(0.5, (classStats.defense - 1) * 0.3);
+    const equipmentDefenseReduction = Math.min(0.5, equipmentStats.defense / 100);
+    const totalDefenseReduction = Math.min(0.8, classDefenseReduction + equipmentDefenseReduction);
+    finalDamage = Math.floor(finalDamage * (1 - totalDefenseReduction));
     
     finalDamage = Math.max(1, Math.floor(finalDamage * (1 - talentEffects.damageReduction)));
     

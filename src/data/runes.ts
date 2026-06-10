@@ -28,6 +28,42 @@ export const ELEMENT_RUNES: Rune[] = [
     rarity: 'common',
     description: '蕴含雷电之力的符文，高伤害有几率麻痹',
   },
+  {
+    id: 'rune_fire_exclusive',
+    name: '烈焰核心',
+    type: 'element',
+    element: 'fire',
+    color: '#ff4757',
+    rarity: 'epic',
+    description: '【火焰法师专属】蕴含远古火焰之力，大幅提升火焰伤害',
+  },
+  {
+    id: 'rune_ice_exclusive',
+    name: '永冻之心',
+    type: 'element',
+    element: 'ice',
+    color: '#00d2d3',
+    rarity: 'epic',
+    description: '【冰霜术士专属】极寒之力的结晶，冻结时间更长',
+  },
+  {
+    id: 'rune_thunder_exclusive',
+    name: '雷霆之怒',
+    type: 'element',
+    element: 'thunder',
+    color: '#f368e0',
+    rarity: 'epic',
+    description: '【雷电刺客专属】狂暴雷电之力，必定暴击',
+  },
+  {
+    id: 'rune_nature_exclusive',
+    name: '生命之种',
+    type: 'element',
+    element: 'fire',
+    color: '#7bed9f',
+    rarity: 'epic',
+    description: '【自然守护者专属】生命力量的精华，攻击时恢复生命',
+  },
 ];
 
 export const EFFECT_RUNES: Rune[] = [
@@ -66,6 +102,42 @@ export const EFFECT_RUNES: Rune[] = [
     color: '#74b9ff',
     rarity: 'common',
     description: '技能可穿透多个敌人',
+  },
+  {
+    id: 'rune_explosion',
+    name: '爆裂符文',
+    type: 'effect',
+    effect: 'spread',
+    color: '#ff6348',
+    rarity: 'epic',
+    description: '【专属】技能命中后产生二次爆炸',
+  },
+  {
+    id: 'rune_freeze',
+    name: '冰封符文',
+    type: 'effect',
+    effect: 'time',
+    color: '#1e90ff',
+    rarity: 'epic',
+    description: '【专属】完全冻结敌人，无法行动',
+  },
+  {
+    id: 'rune_chain',
+    name: '连锁符文',
+    type: 'effect',
+    effect: 'pierce',
+    color: '#ffd700',
+    rarity: 'epic',
+    description: '【专属】闪电在敌人间多次跳跃',
+  },
+  {
+    id: 'rune_regen',
+    name: '再生符文',
+    type: 'effect',
+    effect: 'power',
+    color: '#2ed573',
+    rarity: 'epic',
+    description: '【专属】技能伤害转化为生命值',
   },
 ];
 
@@ -281,4 +353,8 @@ export const getRandomRunes = (count: number): Rune[] => {
 
 export const getRandomRune = (): Rune => {
   return ALL_RUNES[Math.floor(Math.random() * ALL_RUNES.length)];
+};
+
+export const getRuneById = (id: string): Rune | undefined => {
+  return ALL_RUNES.find(r => r.id === id);
 };

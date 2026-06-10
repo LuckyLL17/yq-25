@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import MainMenu from './components/MainMenu';
+import ClassSelect from './components/ClassSelect';
 import GameCanvas from './components/GameCanvas';
 import ToastContainer from './components/ToastContainer';
 import TalentTree from './components/TalentTree';
@@ -98,7 +99,14 @@ export default function App() {
       <BadgePanel />
       <EquipmentPanel />
       <PotionPanel />
-      {scene === 'menu' ? <MainMenu /> : <GameCanvas />}
+      {scene === 'menu' || scene === 'class_select' ? (
+        <>
+          <MainMenu />
+          <ClassSelect />
+        </>
+      ) : (
+        <GameCanvas />
+      )}
     </div>
   );
 }

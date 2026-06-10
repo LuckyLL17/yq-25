@@ -21,7 +21,7 @@ const MainMenu = () => {
   if (scene !== 'menu') return null;
   
   const handleStartGame = () => {
-    engine.startGame();
+    engine.setScene('class_select');
   };
   
   const handleOpenTalents = () => {

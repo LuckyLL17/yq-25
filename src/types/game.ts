@@ -61,7 +61,32 @@ export interface Dungeon {
   shop: Shop | null;
 }
 
-export type GameScene = 'menu' | 'playing' | 'gameover' | 'victory' | 'codex';
+export type GameScene = 'menu' | 'class_select' | 'playing' | 'gameover' | 'victory' | 'codex';
+
+export type ClassType = 'fire_mage' | 'frost_warlock' | 'thunder_assassin' | 'nature_guardian';
+
+export interface ClassStats {
+  maxHp: number;
+  speed: number;
+  attack: number;
+  defense: number;
+  critChance: number;
+  critDamage: number;
+  attackSpeed: number;
+}
+
+export interface PlayerClass {
+  id: ClassType;
+  name: string;
+  description: string;
+  playStyle: string;
+  color: string;
+  icon: string;
+  stats: ClassStats;
+  startingRuneIds: string[];
+  exclusiveRuneIds: string[];
+  difficulty: 'easy' | 'medium' | 'hard';
+}
 
 export type RuneElement = 'fire' | 'ice' | 'thunder';
 export type RuneEffect = 'spread' | 'time' | 'power' | 'pierce';
@@ -317,11 +342,13 @@ export interface Player {
   shieldTimer: number;
   damageBoostTimer: number;
   damageBoostPercent: number;
+  classType: ClassType | null;
 }
 
 export interface GameState {
   scene: GameScene;
   player: Player;
+  selectedClass: ClassType | null;
   dungeon: Dungeon | null;
   monsters: Monster[];
   chests: Chest[];

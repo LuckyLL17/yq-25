@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { GameScene, Rune, Skill, Player, Monster, Chest, SaveData, DailyChallenge, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, Pet } from '../types/game';
+import type { GameScene, Rune, Skill, Player, Monster, Chest, SaveData, DailyChallenge, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, Pet, ClassType } from '../types/game';
 import { loadSaveData, unlockTalent as saveUnlockTalent, saveEquipment, savePotions } from '../game/utils/storage';
 import { getTalentCost, canUnlockTalent } from '../data/talents';
 import { upgradeEquipment as upgradeEquip, getUpgradeCost, getEquipmentTemplate, generateShopEquipment, getBuyPrice, getSellPrice } from '../data/equipment';
@@ -38,6 +38,7 @@ interface ToastMessage {
 
 interface GameStore {
   scene: GameScene;
+  selectedClass: ClassType | null;
   player: Player | null;
   monsters: Monster[];
   chests: Chest[];
@@ -130,6 +131,7 @@ export const useGameStore = create<GameStore>((set, get) => {
   
   return {
     scene: 'menu',
+    selectedClass: null,
     player: null,
     monsters: [],
     chests: [],
@@ -244,6 +246,7 @@ export const useGameStore = create<GameStore>((set, get) => {
   updateFromEngine: (state) => {
     set({
       scene: state.scene,
+      selectedClass: state.selectedClass || null,
       player: state.player,
       runeInventory: state.runeInventory,
       equippedRunes: state.equippedRunes,
