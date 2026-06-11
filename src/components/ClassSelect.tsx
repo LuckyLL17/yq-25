@@ -24,6 +24,8 @@ const ClassSelect = () => {
 
   const handleStartGame = () => {
     if (!selectedClass) return;
+    // 将 selectedClass 同步到引擎状态，避免 updateFromEngine 时覆盖为 null
+    engine.state.selectedClass = selectedClass;
     engine.setScene('difficulty_select');
   };
 
