@@ -1,4 +1,4 @@
-import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, MonsterSkill, MonsterProjectile, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, ShopItem, ClassType, PlayerClass, GameAction, AdventureDifficulty, MonsterState } from '../types/game';
+import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, MonsterSkill, MonsterProjectile, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, ShopItem, ClassType, PlayerClass, GameAction, AdventureDifficulty, MonsterState, SkillVFX, ScreenFlash, ColorFilter, ChantState } from '../types/game';
 import { GAME_CONFIG } from '../data/config';
 import { generateDungeon, generateMonsters, generateChests, getPlayerStartPosition, updateFOV, isWalkable } from './utils/dungeon';
 import { getRandomRunes, createSkill, ALL_RUNES, SKILLS, getRuneById } from '../data/runes';
@@ -115,6 +115,11 @@ export class GameEngine {
       materialInventory: [],
       potionCooldowns: {},
       potionBuffTimers: {},
+      skillVFXs: [],
+      screenFlash: null,
+      colorFilter: null,
+      playerChant: null,
+      screenShake: { intensity: 0, duration: 0, maxDuration: 0 },
     };
   }
   
@@ -164,6 +169,11 @@ export class GameEngine {
     this.updateParticles(deltaTime);
     this.updateDamageNumbers(deltaTime);
     this.updateSkillCooldowns(deltaTime);
+    this.updateSkillVFXs(deltaTime);
+    this.updateChant(deltaTime);
+    this.updateScreenFlash(deltaTime);
+    this.updateColorFilter(deltaTime);
+    this.updateScreenShake(deltaTime);
     this.updatePotionCooldowns(deltaTime);
     this.updatePotionBuffs(deltaTime);
     this.updateCamera();
@@ -777,6 +787,7 @@ export class GameEngine {
       const distToPlayer = distance(proj.position, this.state.player.position);
       if (distToPlayer < 20 + proj.size && this.state.player.invincible <= 0) {
         this.damagePlayer(proj.damage);
+        this.addScreenFlash(proj.color, 0.2, 150);
         this.state.monsterProjectiles.splice(i, 1);
         continue;
       }
@@ -1215,39 +1226,74 @@ export class GameEngine {
   
   private updateProjectiles(deltaTime: number) {
     const dt = deltaTime / 1000;
-    
+
     for (let i = this.state.projectiles.length - 1; i >= 0; i--) {
       const proj = this.state.projectiles[i];
-      
+
       proj.position.x += proj.velocity.x * dt;
       proj.position.y += proj.velocity.y * dt;
       proj.traveled += Math.abs(proj.velocity.x * dt) + Math.abs(proj.velocity.y * dt);
-      
-      if (Math.random() < 0.3) {
+
+      if (Math.random() < 0.5) {
+        const color = getElementColor(proj.element);
         this.addParticle(
-          proj.position.x,
-          proj.position.y,
-          getElementColor(proj.element),
+          proj.position.x + (Math.random() - 0.5) * 4,
+          proj.position.y + (Math.random() - 0.5) * 4,
+          color,
           'spark'
         );
       }
-      
+
+      if (proj.element === 'fire' && Math.random() < 0.3) {
+        this.addParticle(
+          proj.position.x + (Math.random() - 0.5) * 6,
+          proj.position.y + (Math.random() - 0.5) * 6,
+          '#ffe66d',
+          'spark'
+        );
+      } else if (proj.element === 'ice' && Math.random() < 0.3) {
+        this.addParticle(
+          proj.position.x + (Math.random() - 0.5) * 6,
+          proj.position.y + (Math.random() - 0.5) * 6,
+          '#ffffff',
+          'magic'
+        );
+      } else if (proj.element === 'thunder' && Math.random() < 0.2) {
+        this.addParticle(
+          proj.position.x + (Math.random() - 0.5) * 8,
+          proj.position.y + (Math.random() - 0.5) * 8,
+          '#ffffff',
+          'spark'
+        );
+      }
+
       for (const monster of this.state.monsters) {
         if (monster.hp <= 0) continue;
         if (proj.hitTargets.includes(monster.id)) continue;
-        
+
         const dist = distance(proj.position, monster.position);
         if (dist < 20 + proj.size) {
           this.damageMonster(monster, proj.damage, proj.element, proj.effect);
           proj.hitTargets.push(monster.id);
-          
+
+          this.addSkillVFX({
+            id: generateId(),
+            type: 'impact_burst',
+            position: { ...monster.position },
+            element: proj.element,
+            color: getElementColor(proj.element),
+            life: 200,
+            maxLife: 200,
+            radius: 15,
+          });
+
           if (!proj.piercing) {
             this.state.projectiles.splice(i, 1);
             break;
           }
         }
       }
-      
+
       if (
         proj.traveled > proj.range ||
         !this.state.dungeon ||
@@ -1293,6 +1339,87 @@ export class GameEngine {
         skill.currentCooldown -= deltaTime;
         if (skill.currentCooldown < 0) skill.currentCooldown = 0;
       }
+    }
+  }
+
+  private updateSkillVFXs(deltaTime: number) {
+    for (let i = this.state.skillVFXs.length - 1; i >= 0; i--) {
+      const vfx = this.state.skillVFXs[i];
+      vfx.life -= deltaTime;
+
+      if (vfx.maxRadius && vfx.type === 'explosion_ring') {
+        const progress = 1 - vfx.life / vfx.maxLife;
+        vfx.radius = 5 + (vfx.maxRadius - 5) * Math.pow(progress, 0.5);
+      }
+
+      if (vfx.maxRadius && vfx.type === 'shockwave') {
+        const progress = 1 - vfx.life / vfx.maxLife;
+        vfx.radius = 5 + (vfx.maxRadius - 5) * progress;
+      }
+
+      if (vfx.life <= 0) {
+        this.state.skillVFXs.splice(i, 1);
+      }
+    }
+  }
+
+  private updateChant(deltaTime: number) {
+    const chant = this.state.playerChant;
+    if (!chant || !chant.isChanting) return;
+
+    chant.timer += deltaTime;
+
+    const player = this.state.player;
+    if (Math.random() < 0.4) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 10 + Math.random() * 20;
+      this.addParticle(
+        player.position.x + Math.cos(angle) * dist,
+        player.position.y + Math.sin(angle) * dist,
+        chant.color,
+        'magic'
+      );
+    }
+
+    if (chant.timer >= chant.duration) {
+      chant.isChanting = false;
+      this.state.playerChant = null;
+      this.completeSkillCast(chant.skillIndex);
+    }
+  }
+
+  private updateScreenFlash(deltaTime: number) {
+    const flash = this.state.screenFlash;
+    if (!flash) return;
+
+    flash.duration -= deltaTime;
+    flash.alpha = flash.intensity * (flash.duration / flash.maxDuration);
+
+    if (flash.duration <= 0) {
+      this.state.screenFlash = null;
+    }
+  }
+
+  private updateColorFilter(deltaTime: number) {
+    const filter = this.state.colorFilter;
+    if (!filter) return;
+
+    filter.duration -= deltaTime;
+    filter.alpha = (filter.alpha / filter.maxDuration) * filter.maxDuration * (filter.duration / filter.maxDuration);
+
+    if (filter.duration <= 0) {
+      this.state.colorFilter = null;
+    }
+  }
+
+  private updateScreenShake(deltaTime: number) {
+    const shake = this.state.screenShake;
+    if (shake.duration <= 0) return;
+
+    shake.duration -= deltaTime;
+    if (shake.duration <= 0) {
+      shake.intensity = 0;
+      shake.duration = 0;
     }
   }
   
@@ -1643,8 +1770,14 @@ export class GameEngine {
     this.state.projectiles = [];
     this.state.monsterProjectiles = [];
     this.state.particles = [];
-    
+    this.state.skillVFXs = [];
+    this.state.screenFlash = null;
+    this.state.colorFilter = null;
+    this.state.playerChant = null;
+    this.state.screenShake = { intensity: 0, duration: 0, maxDuration: 0 };
+
     if (this.state.pet) {
+
       this.state.pet.hp = this.state.pet.maxHp;
       this.state.pet.position = { x: startPos.x - 30, y: startPos.y + 20 };
       this.state.pet.skill.currentCooldown = 0;
@@ -1721,6 +1854,11 @@ export class GameEngine {
     this.state.monsterProjectiles = [];
     this.state.particles = [];
     this.state.damageNumbers = [];
+    this.state.skillVFXs = [];
+    this.state.screenFlash = null;
+    this.state.colorFilter = null;
+    this.state.playerChant = null;
+    this.state.screenShake = { intensity: 0, duration: 0, maxDuration: 0 };
     this.state.runeInventory = initialRunes;
     this.state.equippedRunes = equipped;
     this.state.activeSkills = [];
@@ -2038,6 +2176,11 @@ export class GameEngine {
     this.state.monsterProjectiles = [];
     this.state.particles = [];
     this.state.damageNumbers = [];
+    this.state.skillVFXs = [];
+    this.state.screenFlash = null;
+    this.state.colorFilter = null;
+    this.state.playerChant = null;
+    this.state.screenShake = { intensity: 0, duration: 0, maxDuration: 0 };
     this.state.runeInventory = challengeRunes;
     this.state.equippedRunes = equipped;
     this.state.activeSkills = [];
@@ -2082,18 +2225,48 @@ export class GameEngine {
   
   public useSkill(skillIndex: number) {
     if (this.state.scene !== 'playing') return;
-    
+    if (this.state.playerChant?.isChanting) return;
+
     const skill = this.state.activeSkills[skillIndex];
     if (!skill || skill.currentCooldown > 0) return;
-    
+
+    const chantDuration = skill.effect === 'power' ? 400 : skill.effect === 'pierce' ? 200 : 300;
+
+    this.state.playerChant = {
+      isChanting: true,
+      skillIndex,
+      timer: 0,
+      duration: chantDuration,
+      element: skill.element,
+      color: getElementColor(skill.element),
+    };
+
+    for (let i = 0; i < 8; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 15 + Math.random() * 15;
+      this.addParticle(
+        this.state.player.position.x + Math.cos(angle) * dist,
+        this.state.player.position.y + Math.sin(angle) * dist,
+        getElementColor(skill.element),
+        'magic'
+      );
+    }
+  }
+
+  private completeSkillCast(skillIndex: number) {
+    const skill = this.state.activeSkills[skillIndex];
+    if (!skill) return;
+
     skill.currentCooldown = skill.cooldown;
-    
+
     const player = this.state.player;
-    const targetX = player.position.x + player.direction * 50;
-    const targetY = player.position.y;
-    
+
     getAudioManager().playSFX('skill');
-    
+
+    this.addScreenShake(3, 150);
+    this.addScreenFlash(getElementColor(skill.element), 0.15, 100);
+    this.addColorFilter(getElementColor(skill.element), 0.08, 500);
+
     if (skill.effect === 'spread') {
       this.castAreaSkill(skill);
     } else if (skill.effect === 'time') {
@@ -2349,53 +2522,185 @@ export class GameEngine {
   
   private castAreaSkill(skill: Skill) {
     const player = this.state.player;
-    
-    for (let i = 0; i < 30; i++) {
-      const angle = (Math.PI * 2 * i) / 30;
+    const color = getElementColor(skill.element);
+
+    this.addSkillVFX({
+      id: generateId(),
+      type: 'explosion_ring',
+      position: { ...player.position },
+      element: skill.element,
+      color,
+      life: 600,
+      maxLife: 600,
+      radius: 5,
+      maxRadius: skill.range,
+    });
+
+    this.addSkillVFX({
+      id: generateId(),
+      type: 'shockwave',
+      position: { ...player.position },
+      element: skill.element,
+      color,
+      life: 400,
+      maxLife: 400,
+      radius: 5,
+      maxRadius: skill.range * 1.2,
+      lineWidth: 3,
+    });
+
+    this.addScreenShake(5, 300);
+    this.addScreenFlash(color, 0.25, 150);
+
+    for (let i = 0; i < 40; i++) {
+      const angle = (Math.PI * 2 * i) / 40;
+      const dist = Math.random() * skill.range * 0.5;
       this.addParticle(
-        player.position.x + Math.cos(angle) * skill.range * 0.5,
-        player.position.y + Math.sin(angle) * skill.range * 0.5,
-        getElementColor(skill.element),
+        player.position.x + Math.cos(angle) * dist,
+        player.position.y + Math.sin(angle) * dist,
+        color,
         'explosion'
       );
     }
-    
+
+    if (skill.element === 'fire') {
+      for (let i = 0; i < 20; i++) {
+        this.addParticle(
+          player.position.x + (Math.random() - 0.5) * skill.range,
+          player.position.y + (Math.random() - 0.5) * skill.range,
+          '#ffe66d',
+          'spark'
+        );
+      }
+    } else if (skill.element === 'ice') {
+      for (let i = 0; i < 15; i++) {
+        const angle = (Math.PI * 2 * i) / 15;
+        this.addParticle(
+          player.position.x + Math.cos(angle) * skill.range * 0.7,
+          player.position.y + Math.sin(angle) * skill.range * 0.7,
+          '#ffffff',
+          'magic'
+        );
+      }
+    } else if (skill.element === 'thunder') {
+      for (let i = 0; i < 12; i++) {
+        this.addParticle(
+          player.position.x + (Math.random() - 0.5) * skill.range * 0.8,
+          player.position.y + (Math.random() - 0.5) * skill.range * 0.8,
+          '#ffffff',
+          'spark'
+        );
+      }
+    }
+
     for (const monster of this.state.monsters) {
       if (monster.hp <= 0) continue;
       const dist = distance(player.position, monster.position);
       if (dist < skill.range) {
         this.damageMonster(monster, skill.damage, skill.element, skill.effect);
+        this.addSkillVFX({
+          id: generateId(),
+          type: 'impact_burst',
+          position: { ...monster.position },
+          element: skill.element,
+          color,
+          life: 300,
+          maxLife: 300,
+          radius: 20,
+        });
       }
     }
   }
   
   private castDurationSkill(skill: Skill) {
     const player = this.state.player;
-    
+    const color = getElementColor(skill.element);
+
+    this.addSkillVFX({
+      id: generateId(),
+      type: 'persistent_field',
+      position: { ...player.position },
+      element: skill.element,
+      color,
+      life: skill.duration,
+      maxLife: skill.duration,
+      radius: skill.range,
+    });
+
+    this.addSkillVFX({
+      id: generateId(),
+      type: 'explosion_ring',
+      position: { ...player.position },
+      element: skill.element,
+      color,
+      life: 500,
+      maxLife: 500,
+      radius: 5,
+      maxRadius: skill.range,
+    });
+
+    this.addScreenShake(2, 200);
+    this.addColorFilter(color, 0.1, skill.duration);
+
     const applyDamage = () => {
       for (const monster of this.state.monsters) {
         if (monster.hp <= 0) continue;
         const dist = distance(player.position, monster.position);
         if (dist < skill.range) {
           this.damageMonster(monster, skill.damage * 0.3, skill.element, skill.effect);
+          this.addSkillVFX({
+            id: generateId(),
+            type: 'impact_burst',
+            position: { ...monster.position },
+            element: skill.element,
+            color,
+            life: 200,
+            maxLife: 200,
+            radius: 15,
+          });
         }
       }
     };
-    
+
     for (let i = 0; i < 5; i++) {
       setTimeout(() => {
         if (this.state.scene === 'playing') {
           applyDamage();
-          
-          for (let j = 0; j < 8; j++) {
-            const angle = Math.random() * Math.PI * 2;
-            const dist = Math.random() * skill.range;
-            this.addParticle(
-              player.position.x + Math.cos(angle) * dist,
-              player.position.y + Math.sin(angle) * dist,
-              getElementColor(skill.element),
-              'magic'
-            );
+
+          if (skill.element === 'fire') {
+            for (let j = 0; j < 12; j++) {
+              const angle = Math.random() * Math.PI * 2;
+              const dist = Math.random() * skill.range;
+              this.addParticle(
+                player.position.x + Math.cos(angle) * dist,
+                player.position.y + Math.sin(angle) * dist - 5,
+                Math.random() < 0.5 ? '#ff6b35' : '#ffe66d',
+                'spark'
+              );
+            }
+          } else if (skill.element === 'ice') {
+            for (let j = 0; j < 10; j++) {
+              const angle = Math.random() * Math.PI * 2;
+              const dist = Math.random() * skill.range;
+              this.addParticle(
+                player.position.x + Math.cos(angle) * dist,
+                player.position.y + Math.sin(angle) * dist,
+                Math.random() < 0.5 ? '#4ecdc4' : '#ffffff',
+                'magic'
+              );
+            }
+          } else if (skill.element === 'thunder') {
+            for (let j = 0; j < 8; j++) {
+              const angle = Math.random() * Math.PI * 2;
+              const dist = Math.random() * skill.range;
+              this.addParticle(
+                player.position.x + Math.cos(angle) * dist,
+                player.position.y + Math.sin(angle) * dist,
+                Math.random() < 0.5 ? '#ffe66d' : '#ffffff',
+                'spark'
+              );
+            }
+            this.addScreenFlash('#ffe66d', 0.1, 80);
           }
         }
       }, i * (skill.duration / 5));
@@ -2404,10 +2709,11 @@ export class GameEngine {
   
   private castPowerSkill(skill: Skill) {
     const player = this.state.player;
-    
+    const color = getElementColor(skill.element);
+
     let nearestMonster: Monster | null = null;
     let nearestDist = Infinity;
-    
+
     for (const monster of this.state.monsters) {
       if (monster.hp <= 0) continue;
       const dist = distance(player.position, monster.position);
@@ -2416,20 +2722,104 @@ export class GameEngine {
         nearestMonster = monster;
       }
     }
-    
+
     const targetX = nearestMonster ? nearestMonster.position.x : player.position.x + player.direction * 80;
     const targetY = nearestMonster ? nearestMonster.position.y : player.position.y;
-    
-    for (let i = 0; i < 25; i++) {
-      const angle = (Math.PI * 2 * i) / 25;
+
+    this.addSkillVFX({
+      id: generateId(),
+      type: 'beam',
+      position: { ...player.position },
+      targetPosition: { x: targetX, y: targetY },
+      element: skill.element,
+      color,
+      life: 300,
+      maxLife: 300,
+      radius: 8,
+      lineWidth: 6,
+      angle: Math.atan2(targetY - player.position.y, targetX - player.position.x),
+    });
+
+    this.addSkillVFX({
+      id: generateId(),
+      type: 'explosion_ring',
+      position: { x: targetX, y: targetY },
+      element: skill.element,
+      color,
+      life: 500,
+      maxLife: 500,
+      radius: 5,
+      maxRadius: skill.range * 0.8,
+    });
+
+    this.addSkillVFX({
+      id: generateId(),
+      type: 'shockwave',
+      position: { x: targetX, y: targetY },
+      element: skill.element,
+      color,
+      life: 300,
+      maxLife: 300,
+      radius: 5,
+      maxRadius: skill.range,
+      lineWidth: 2,
+    });
+
+    this.addSkillVFX({
+      id: generateId(),
+      type: 'impact_burst',
+      position: { x: targetX, y: targetY },
+      element: skill.element,
+      color,
+      life: 400,
+      maxLife: 400,
+      radius: 30,
+    });
+
+    this.addScreenShake(8, 400);
+    this.addScreenFlash(color, 0.35, 200);
+
+    for (let i = 0; i < 30; i++) {
+      const angle = (Math.PI * 2 * i) / 30;
       this.addParticle(
         targetX + Math.cos(angle) * skill.range * 0.3,
         targetY + Math.sin(angle) * skill.range * 0.3,
-        getElementColor(skill.element),
+        color,
         'explosion'
       );
     }
-    
+
+    if (skill.element === 'fire') {
+      for (let i = 0; i < 25; i++) {
+        this.addParticle(
+          targetX + (Math.random() - 0.5) * skill.range * 0.6,
+          targetY + (Math.random() - 0.5) * skill.range * 0.6 - 10,
+          Math.random() < 0.3 ? '#ffe66d' : '#ff6b35',
+          'spark'
+        );
+      }
+    } else if (skill.element === 'ice') {
+      for (let i = 0; i < 20; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * skill.range * 0.5;
+        this.addParticle(
+          targetX + Math.cos(angle) * dist,
+          targetY + Math.sin(angle) * dist,
+          Math.random() < 0.4 ? '#ffffff' : '#74b9ff',
+          'magic'
+        );
+      }
+    } else if (skill.element === 'thunder') {
+      for (let i = 0; i < 15; i++) {
+        this.addParticle(
+          targetX + (Math.random() - 0.5) * skill.range * 0.5,
+          targetY + (Math.random() - 0.5) * skill.range * 0.5,
+          '#ffffff',
+          'spark'
+        );
+      }
+    }
+
     if (nearestMonster) {
       this.damageMonster(nearestMonster, skill.damage, skill.element, skill.effect, true);
     }
@@ -2437,7 +2827,8 @@ export class GameEngine {
   
   private castPierceSkill(skill: Skill) {
     const player = this.state.player;
-    
+    const color = getElementColor(skill.element);
+
     const proj: Projectile = {
       id: generateId(),
       position: { ...player.position },
@@ -2454,8 +2845,52 @@ export class GameEngine {
       hitTargets: [],
       size: 10,
     };
-    
+
     this.state.projectiles.push(proj);
+
+    this.addSkillVFX({
+      id: generateId(),
+      type: 'projectile_trail',
+      position: { ...player.position },
+      element: skill.element,
+      color,
+      life: 200,
+      maxLife: 200,
+      radius: 15,
+      angle: player.direction > 0 ? 0 : Math.PI,
+      speed: skill.projectileSpeed,
+    });
+
+    this.addScreenShake(2, 100);
+
+    if (skill.element === 'fire') {
+      for (let i = 0; i < 10; i++) {
+        this.addParticle(
+          player.position.x + player.direction * (5 + i * 3),
+          player.position.y + (Math.random() - 0.5) * 8,
+          Math.random() < 0.5 ? '#ff6b35' : '#ffe66d',
+          'spark'
+        );
+      }
+    } else if (skill.element === 'ice') {
+      for (let i = 0; i < 8; i++) {
+        this.addParticle(
+          player.position.x + player.direction * (5 + i * 3),
+          player.position.y + (Math.random() - 0.5) * 10,
+          Math.random() < 0.5 ? '#4ecdc4' : '#74b9ff',
+          'magic'
+        );
+      }
+    } else if (skill.element === 'thunder') {
+      for (let i = 0; i < 6; i++) {
+        this.addParticle(
+          player.position.x + player.direction * (5 + i * 3),
+          player.position.y + (Math.random() - 0.5) * 12,
+          Math.random() < 0.3 ? '#ffffff' : '#ffe66d',
+          'spark'
+        );
+      }
+    }
   }
   
   private damageMonster(
@@ -2498,7 +2933,23 @@ export class GameEngine {
     const color = getElementColor(element as any);
     this.addDamageNumber(monster.position, finalDamage, color, actuallyCrit);
     getAudioManager().playSFX('hit');
-    
+
+    this.addSkillVFX({
+      id: generateId(),
+      type: 'impact_burst',
+      position: { ...monster.position },
+      element: element as any,
+      color,
+      life: 250,
+      maxLife: 250,
+      radius: actuallyCrit ? 25 : 15,
+    });
+
+    if (actuallyCrit) {
+      this.addScreenFlash(color, 0.15, 100);
+      this.addScreenShake(3, 150);
+    }
+
     if (element === 'fire') {
       if (!monster.statusEffects.find(s => s.type === 'burn')) {
         monster.statusEffects.push({
@@ -2622,7 +3073,11 @@ export class GameEngine {
     
     this.addDamageNumber(this.state.player.position, finalDamage, '#ff4757', false);
     getAudioManager().playSFX('damage');
-    
+
+    this.addScreenFlash('#ff4757', 0.3, 200);
+    this.addScreenShake(6, 300);
+    this.addColorFilter('#ff0000', 0.15, 400);
+
     this.consumeEquipmentDurability(1);
     
     for (let i = 0; i < 8; i++) {
@@ -2638,7 +3093,7 @@ export class GameEngine {
   private addParticle(x: number, y: number, color: string, type: 'spark' | 'smoke' | 'explosion' | 'magic') {
     const angle = Math.random() * Math.PI * 2;
     const speed = type === 'explosion' ? 100 : type === 'magic' ? 30 : 50;
-    
+
     this.state.particles.push({
       id: generateId(),
       position: { x, y },
@@ -2652,6 +3107,37 @@ export class GameEngine {
       maxLife: type === 'magic' ? 800 : 500,
       type,
     });
+  }
+
+  private addSkillVFX(vfx: SkillVFX) {
+    this.state.skillVFXs.push(vfx);
+  }
+
+  private addScreenShake(intensity: number, duration: number) {
+    this.state.screenShake = {
+      intensity,
+      duration,
+      maxDuration: duration,
+    };
+  }
+
+  private addScreenFlash(color: string, intensity: number, duration: number) {
+    this.state.screenFlash = {
+      color,
+      alpha: intensity,
+      duration,
+      maxDuration: duration,
+      intensity,
+    };
+  }
+
+  private addColorFilter(color: string, alpha: number, duration: number) {
+    this.state.colorFilter = {
+      color,
+      alpha,
+      duration,
+      maxDuration: duration,
+    };
   }
   
   private addDamageNumber(position: Position, value: number, color: string, isCrit: boolean) {
@@ -2790,10 +3276,19 @@ export class GameEngine {
   
   private renderGame() {
     if (!this.ctx || !this.canvas || !this.state.dungeon) return;
-    
+
     const ctx = this.ctx;
-    const cam = this.state.camera;
+    const cam = { ...this.state.camera };
     const tileSize = GAME_CONFIG.TILE_SIZE;
+
+    const shake = this.state.screenShake;
+    if (shake.duration > 0 && shake.intensity > 0) {
+      const progress = shake.duration / shake.maxDuration;
+      const offsetX = (Math.random() - 0.5) * shake.intensity * 2 * progress;
+      const offsetY = (Math.random() - 0.5) * shake.intensity * 2 * progress;
+      cam.x += offsetX;
+      cam.y += offsetY;
+    }
     
     const startTileX = Math.max(0, Math.floor(cam.x / tileSize));
     const startTileY = Math.max(0, Math.floor(cam.y / tileSize));
@@ -3069,16 +3564,34 @@ export class GameEngine {
     for (const proj of this.state.projectiles) {
       const screenX = proj.position.x - cam.x;
       const screenY = proj.position.y - cam.y;
-      
-      ctx.fillStyle = getElementColor(proj.element);
+      const color = getElementColor(proj.element);
+
+      ctx.fillStyle = getElementGlowColor(proj.element);
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, proj.size + 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(screenX, screenY, proj.size, 0, Math.PI * 2);
       ctx.fill();
-      
-      ctx.fillStyle = getElementGlowColor(proj.element);
+
+      ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(screenX, screenY, proj.size + 4, 0, Math.PI * 2);
+      ctx.arc(screenX, screenY, proj.size * 0.4, 0, Math.PI * 2);
       ctx.fill();
+
+      const dir = normalize(proj.velocity);
+      for (let i = 1; i <= 3; i++) {
+        const trailX = screenX - dir.x * i * 6;
+        const trailY = screenY - dir.y * i * 6;
+        ctx.globalAlpha = 0.6 - i * 0.15;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(trailX, trailY, proj.size * (1 - i * 0.2), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     }
 
     for (const proj of this.state.monsterProjectiles) {
@@ -3086,14 +3599,184 @@ export class GameEngine {
       const screenY = proj.position.y - cam.y;
 
       ctx.fillStyle = proj.color;
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, proj.size + 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      ctx.fillStyle = proj.color;
       ctx.beginPath();
       ctx.arc(screenX, screenY, proj.size, 0, Math.PI * 2);
       ctx.fill();
+    }
 
-      ctx.globalAlpha = 0.4;
+    for (const vfx of this.state.skillVFXs) {
+      const screenX = vfx.position.x - cam.x;
+      const screenY = vfx.position.y - cam.y;
+      const alpha = vfx.life / vfx.maxLife;
+
+      switch (vfx.type) {
+        case 'explosion_ring': {
+          ctx.globalAlpha = alpha * 0.6;
+          ctx.strokeStyle = vfx.color;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, vfx.radius, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.globalAlpha = alpha * 0.2;
+          ctx.fillStyle = vfx.color;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, vfx.radius, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        }
+
+        case 'shockwave': {
+          ctx.globalAlpha = alpha * 0.5;
+          ctx.strokeStyle = vfx.color;
+          ctx.lineWidth = vfx.lineWidth || 2;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, vfx.radius, 0, Math.PI * 2);
+          ctx.stroke();
+          break;
+        }
+
+        case 'persistent_field': {
+          const pulse = 0.5 + Math.sin(Date.now() / 200) * 0.15;
+          ctx.globalAlpha = alpha * pulse * 0.25;
+          ctx.fillStyle = vfx.color;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, vfx.radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.globalAlpha = alpha * pulse * 0.4;
+          ctx.strokeStyle = vfx.color;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, vfx.radius, 0, Math.PI * 2);
+          ctx.stroke();
+
+          if (vfx.element === 'fire') {
+            ctx.globalAlpha = alpha * 0.3;
+            for (let i = 0; i < 4; i++) {
+              const angle = Date.now() / 300 + i * Math.PI / 2;
+              const innerR = vfx.radius * 0.3;
+              const outerR = vfx.radius * 0.8;
+              const fx = screenX + Math.cos(angle) * (innerR + Math.random() * (outerR - innerR));
+              const fy = screenY + Math.sin(angle) * (innerR + Math.random() * (outerR - innerR));
+              ctx.fillStyle = Math.random() < 0.5 ? '#ff6b35' : '#ffe66d';
+              ctx.fillRect(fx - 2, fy - 2, 4, 4);
+            }
+          } else if (vfx.element === 'ice') {
+            ctx.globalAlpha = alpha * 0.3;
+            for (let i = 0; i < 6; i++) {
+              const angle = (Math.PI * 2 * i) / 6;
+              const fx = screenX + Math.cos(angle) * vfx.radius * 0.6;
+              const fy = screenY + Math.sin(angle) * vfx.radius * 0.6;
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(fx - 1, fy - 1, 2, 2);
+            }
+          } else if (vfx.element === 'thunder') {
+            ctx.globalAlpha = alpha * 0.4;
+            const arcAngle = Date.now() / 100;
+            const ax = screenX + Math.cos(arcAngle) * vfx.radius * 0.5;
+            const ay = screenY + Math.sin(arcAngle) * vfx.radius * 0.5;
+            ctx.fillStyle = '#ffe66d';
+            ctx.fillRect(ax - 1, ay - 1, 3, 3);
+          }
+          break;
+        }
+
+        case 'beam': {
+          if (vfx.targetPosition) {
+            const targetScreenX = vfx.targetPosition.x - cam.x;
+            const targetScreenY = vfx.targetPosition.y - cam.y;
+
+            ctx.globalAlpha = alpha * 0.8;
+            ctx.strokeStyle = vfx.color;
+            ctx.lineWidth = vfx.lineWidth || 4;
+            ctx.beginPath();
+            ctx.moveTo(screenX, screenY);
+            ctx.lineTo(targetScreenX, targetScreenY);
+            ctx.stroke();
+
+            ctx.globalAlpha = alpha * 0.4;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = (vfx.lineWidth || 4) * 0.5;
+            ctx.beginPath();
+            ctx.moveTo(screenX, screenY);
+            ctx.lineTo(targetScreenX, targetScreenY);
+            ctx.stroke();
+          }
+          break;
+        }
+
+        case 'impact_burst': {
+          ctx.globalAlpha = alpha * 0.6;
+          ctx.fillStyle = vfx.color;
+          for (let i = 0; i < 8; i++) {
+            const angle = (Math.PI * 2 * i) / 8;
+            const dist = vfx.radius * (1 - alpha * 0.5);
+            const bx = screenX + Math.cos(angle) * dist;
+            const by = screenY + Math.sin(angle) * dist;
+            ctx.fillRect(bx - 2, by - 2, 4, 4);
+          }
+
+          ctx.globalAlpha = alpha * 0.3;
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, vfx.radius * alpha * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        }
+
+        case 'projectile_trail': {
+          ctx.globalAlpha = alpha * 0.3;
+          const trailDir = vfx.angle || 0;
+          for (let i = 0; i < 5; i++) {
+            const trailDist = i * 8;
+            const tx = screenX - Math.cos(trailDir) * trailDist;
+            const ty = screenY - Math.sin(trailDir) * trailDist;
+            const trailSize = vfx.radius * (1 - i * 0.15);
+            ctx.fillStyle = vfx.color;
+            ctx.beginPath();
+            ctx.arc(tx, ty, trailSize, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          break;
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    const chant = this.state.playerChant;
+    if (chant && chant.isChanting) {
+      const playerScreenX = this.state.player.position.x - cam.x;
+      const playerScreenY = this.state.player.position.y - cam.y;
+      const progress = chant.timer / chant.duration;
+
+      ctx.strokeStyle = chant.color;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.6 + Math.sin(Date.now() / 100) * 0.2;
       ctx.beginPath();
-      ctx.arc(screenX, screenY, proj.size + 3, 0, Math.PI * 2);
+      ctx.arc(playerScreenX, playerScreenY, 20 + progress * 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+      ctx.stroke();
+
+      ctx.globalAlpha = 0.3 + progress * 0.3;
+      ctx.fillStyle = chant.color;
+      ctx.beginPath();
+      ctx.arc(playerScreenX, playerScreenY, 25, 0, Math.PI * 2);
       ctx.fill();
+
+      const innerPulse = 0.5 + Math.sin(Date.now() / 80) * 0.3;
+      ctx.globalAlpha = innerPulse * 0.5;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(playerScreenX, playerScreenY, 8 + progress * 4, 0, Math.PI * 2);
+      ctx.fill();
+
       ctx.globalAlpha = 1;
     }
     
@@ -3118,6 +3801,22 @@ export class GameEngine {
       ctx.font = `${dn.isCrit ? 'bold ' : ''}16px monospace`;
       ctx.textAlign = 'center';
       ctx.fillText(dn.value > 0 ? `-${dn.value}` : '', screenX, screenY);
+      ctx.globalAlpha = 1;
+    }
+
+    const flash = this.state.screenFlash;
+    if (flash && flash.alpha > 0) {
+      ctx.globalAlpha = flash.alpha;
+      ctx.fillStyle = flash.color;
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      ctx.globalAlpha = 1;
+    }
+
+    const colorFilter = this.state.colorFilter;
+    if (colorFilter && colorFilter.alpha > 0) {
+      ctx.globalAlpha = colorFilter.alpha;
+      ctx.fillStyle = colorFilter.color;
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
       ctx.globalAlpha = 1;
     }
   }

@@ -415,6 +415,48 @@ export interface Projectile {
   size: number;
 }
 
+export type SkillVFXType = 'projectile_trail' | 'explosion_ring' | 'shockwave' | 'persistent_field' | 'beam' | 'impact_burst';
+
+export interface SkillVFX {
+  id: string;
+  type: SkillVFXType;
+  position: Position;
+  targetPosition?: Position;
+  element: RuneElement;
+  color: string;
+  life: number;
+  maxLife: number;
+  radius: number;
+  maxRadius?: number;
+  lineWidth?: number;
+  angle?: number;
+  speed?: number;
+}
+
+export interface ScreenFlash {
+  color: string;
+  alpha: number;
+  duration: number;
+  maxDuration: number;
+  intensity: number;
+}
+
+export interface ColorFilter {
+  color: string;
+  alpha: number;
+  duration: number;
+  maxDuration: number;
+}
+
+export interface ChantState {
+  isChanting: boolean;
+  skillIndex: number;
+  timer: number;
+  duration: number;
+  element: RuneElement;
+  color: string;
+}
+
 export interface Particle {
   id: string;
   position: Position;
@@ -495,6 +537,11 @@ export interface GameState {
   materialInventory: PotionMaterial[];
   potionCooldowns: Record<string, number>;
   potionBuffTimers: Record<string, number>;
+  skillVFXs: SkillVFX[];
+  screenFlash: ScreenFlash | null;
+  colorFilter: ColorFilter | null;
+  playerChant: ChantState | null;
+  screenShake: { intensity: number; duration: number; maxDuration: number };
 }
 
 export interface SaveData {
