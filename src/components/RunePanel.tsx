@@ -59,7 +59,7 @@ const getRuneIcon = (rune: Rune) => {
 const getRarityStars = (rarity: RuneRarity) => {
   const tier = RARITY_CONFIG[rarity].tier;
   return Array.from({ length: tier }, (_, i) => (
-    <Star key={i} className="w-2 h-2" fill="currentColor" />
+    <Star key={i} className="w-2.5 h-2.5" fill="currentColor" />
   ));
 };
 
@@ -67,15 +67,17 @@ const RarityBadge = ({ rarity }: { rarity: RuneRarity }) => {
   const config = RARITY_CONFIG[rarity];
   return (
     <div
-      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-bold"
+      className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-xs font-bold ${config.animation}`}
       style={{
-        backgroundColor: `${config.color}30`,
+        background: `linear-gradient(135deg, ${config.color}40 0%, ${config.color}20 100%)`,
         color: config.color,
-        border: `1px solid ${config.color}60`,
+        border: `1.5px solid ${config.color}80`,
+        boxShadow: config.borderGlow,
+        textShadow: `0 0 6px ${config.color}80`,
       }}
     >
       {getRarityStars(rarity)}
-      <span className="ml-0.5">{config.name}</span>
+      <span className="ml-1">{config.name}</span>
     </div>
   );
 };
@@ -103,7 +105,6 @@ const RuneCard = ({
 }) => {
   const config = RARITY_CONFIG[rune.rarity];
   const size = small ? 'w-12 h-12' : 'w-14 h-14';
-  const iconSize = small ? 'w-5 h-5' : 'w-6 h-6';
 
   const handleDragStart = (e: React.DragEvent) => {
     if (!onDragStart) return;
@@ -117,25 +118,32 @@ const RuneCard = ({
 
   return (
     <div className="relative inline-block">
+      {rune.rarity !== 'common' && (
+        <div
+          className="absolute inset-[-3px] rounded-lg pointer-events-none"
+          style={{
+            background: `radial-gradient(circle, ${config.color}50 0%, transparent 70%)`,
+            filter: 'blur(4px)',
+            zIndex: 0,
+          }}
+        />
+      )}
       <div
         draggable={!!onDragStart}
         onDragStart={handleDragStart}
         onClick={onClick}
         onContextMenu={onContextMenu}
-        className={`${size} rounded-lg border-4 flex items-center justify-center relative overflow-hidden
+        className={`${size} rounded-lg border-[3px] flex items-center justify-center relative overflow-hidden
           ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''}
           ${onClick ? 'cursor-pointer' : ''}
           ${selected ? 'ring-4 ring-white scale-110 z-10' : ''}
           ${decomposed ? 'opacity-40 grayscale' : ''}
-          transition-all duration-200 hover:scale-110 hover:brightness-110 shadow-lg
+          transition-all duration-200 hover:scale-110 hover:brightness-115 shadow-lg
           ${config.animation}`}
         style={{
-          backgroundColor: rune.color,
+          background: `linear-gradient(145deg, ${rune.color} 0%, ${rune.color}cc 50%, ${rune.color}99 100%)`,
           borderColor: config.borderColor,
-          boxShadow: `0 0 ${config.glowIntensity}px ${rune.color}80,
-            0 0 ${config.glowIntensity * 2}px ${config.color}40,
-            inset 0 -3px 0 rgba(0,0,0,0.3),
-            inset 0 2px 0 rgba(255,255,255,0.3)`,
+          boxShadow: `${config.borderGlow}, ${config.innerShadow}, 0 0 ${config.glowIntensity}px ${rune.color}80`,
         }}
       >
         <div
@@ -143,24 +151,33 @@ const RuneCard = ({
           style={{ backgroundColor: config.color }}
         />
         <div className="absolute inset-0 flex items-center justify-center z-10">
-          <div className={iconSize.includes('w-5') ? 'w-5 h-5' : 'w-6 h-6'}>
+          <div className="drop-shadow-lg">
             {getRuneIcon(rune)}
           </div>
         </div>
-        <div className="absolute inset-0 rounded-md bg-gradient-to-t from-transparent to-white/20 pointer-events-none z-10" />
+        <div
+          className="absolute inset-0 rounded-md pointer-events-none z-10"
+          style={{
+            background: `linear-gradient(180deg, rgba(255,255,255,0.25) 0%, transparent 40%, transparent 60%, rgba(0,0,0,0.15) 100%)`,
+          }}
+        />
         {rune.rarity === 'legendary' && (
           <>
             <div
               className="rarity-sparkle"
-              style={{ top: '10%', left: '15%', animationDelay: '0s' }}
+              style={{ top: '8%', left: '10%', animationDelay: '0s' }}
+            />
+            <div
+              className="rarity-sparkle-diamond"
+              style={{ top: '55%', right: '8%', animationDelay: '0.6s' }}
             />
             <div
               className="rarity-sparkle"
-              style={{ top: '60%', left: '80%', animationDelay: '0.5s' }}
+              style={{ bottom: '10%', left: '20%', animationDelay: '1.2s' }}
             />
             <div
-              className="rarity-sparkle"
-              style={{ top: '75%', left: '25%', animationDelay: '1s' }}
+              className="rarity-sparkle-diamond"
+              style={{ top: '15%', right: '20%', animationDelay: '1.8s' }}
             />
           </>
         )}
@@ -168,17 +185,33 @@ const RuneCard = ({
           <>
             <div
               className="rarity-sparkle"
-              style={{ top: '20%', left: '75%', animationDelay: '0.7s' }}
+              style={{ top: '15%', right: '15%', animationDelay: '0.7s' }}
+            />
+            <div
+              className="rarity-sparkle-diamond"
+              style={{ bottom: '15%', left: '15%', animationDelay: '1.4s' }}
             />
             <div
               className="rarity-sparkle"
-              style={{ top: '70%', left: '20%', animationDelay: '1.3s' }}
+              style={{ top: '60%', right: '60%', animationDelay: '2.1s' }}
+            />
+          </>
+        )}
+        {rune.rarity === 'rare' && (
+          <>
+            <div
+              className="rarity-sparkle"
+              style={{ top: '20%', right: '20%', animationDelay: '0.5s' }}
+            />
+            <div
+              className="rarity-sparkle"
+              style={{ bottom: '20%', left: '20%', animationDelay: '1.5s' }}
             />
           </>
         )}
       </div>
       {showRarity && !small && (
-        <div className="absolute -top-2 -right-2 z-20">
+        <div className="absolute -top-2.5 -right-2.5 z-20">
           <RarityBadge rarity={rune.rarity} />
         </div>
       )}

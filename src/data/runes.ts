@@ -10,6 +10,9 @@ export const RARITY_CONFIG: Record<RuneRarity, {
   tier: number;
   dustValue: number;
   synthesizeCount: number;
+  borderGlow: string;
+  innerShadow: string;
+  bgStyle: string;
 }> = {
   common: {
     name: '普通',
@@ -21,39 +24,51 @@ export const RARITY_CONFIG: Record<RuneRarity, {
     tier: 1,
     dustValue: 5,
     synthesizeCount: 3,
+    borderGlow: 'none',
+    innerShadow: 'inset 0 -2px 0 rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.15)',
+    bgStyle: '',
   },
   rare: {
     name: '稀有',
     color: '#3b82f6',
-    borderColor: '#2563eb',
+    borderColor: '#60a5fa',
     bgGradient: 'from-blue-500 to-blue-600',
     glowIntensity: 12,
-    animation: 'animate-pulse-slow',
+    animation: 'animate-rare-aura animate-pulse-slow',
     tier: 2,
     dustValue: 15,
     synthesizeCount: 3,
+    borderGlow: '0 0 8px 2px rgba(96, 165, 250, 0.5)',
+    innerShadow: 'inset 0 -3px 0 rgba(0,0,0,0.3), inset 0 2px 0 rgba(147, 197, 253, 0.4)',
+    bgStyle: '',
   },
   epic: {
     name: '史诗',
     color: '#a855f7',
-    borderColor: '#9333ea',
+    borderColor: '#c084fc',
     bgGradient: 'from-purple-500 to-purple-600',
     glowIntensity: 18,
-    animation: 'animate-pulse-slow animate-shimmer',
+    animation: 'animate-epic-aura animate-pulse-slow animate-shimmer',
     tier: 3,
     dustValue: 50,
     synthesizeCount: 3,
+    borderGlow: '0 0 12px 3px rgba(192, 132, 252, 0.5)',
+    innerShadow: 'inset 0 -3px 0 rgba(0,0,0,0.35), inset 0 2px 0 rgba(216, 180, 254, 0.45)',
+    bgStyle: '',
   },
   legendary: {
     name: '传说',
     color: '#f59e0b',
-    borderColor: '#d97706',
+    borderColor: '#fbbf24',
     bgGradient: 'from-yellow-500 to-orange-500',
     glowIntensity: 25,
-    animation: 'animate-pulse-slow animate-shimmer animate-rainbow',
+    animation: 'animate-legendary-aura animate-pulse-slow animate-shimmer animate-rainbow',
     tier: 4,
     dustValue: 200,
     synthesizeCount: 0,
+    borderGlow: '0 0 16px 4px rgba(251, 191, 36, 0.5)',
+    innerShadow: 'inset 0 -3px 0 rgba(0,0,0,0.3), inset 0 3px 0 rgba(254, 240, 138, 0.5)',
+    bgStyle: '',
   },
 };
 

@@ -136,7 +136,9 @@ canvas {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.2) 45%,
+    rgba(255, 255, 255, 0.35) 50%,
+    rgba(255, 255, 255, 0.2) 55%,
     transparent 100%
   );
   background-size: 200% 100%;
@@ -148,10 +150,19 @@ canvas {
 
 @keyframes rainbow-border {
   0% {
-    filter: hue-rotate(0deg);
+    filter: hue-rotate(0deg) brightness(1);
+  }
+  25% {
+    filter: hue-rotate(90deg) brightness(1.1);
+  }
+  50% {
+    filter: hue-rotate(180deg) brightness(1);
+  }
+  75% {
+    filter: hue-rotate(270deg) brightness(1.1);
   }
   100% {
-    filter: hue-rotate(360deg);
+    filter: hue-rotate(360deg) brightness(1);
   }
 }
 
@@ -178,6 +189,94 @@ canvas {
   border-radius: 50%;
   animation: sparkle 2s ease-in-out infinite;
   pointer-events: none;
+  z-index: 20;
+}
+
+@keyframes sparkle-diamond {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0) rotate(45deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1) rotate(45deg);
+  }
+}
+
+.rarity-sparkle-diamond {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  background: white;
+  animation: sparkle-diamond 2.5s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 20;
+}
+
+@keyframes rare-float {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+.animate-rare-float {
+  animation: rare-float 2s ease-in-out infinite;
+}
+
+@keyframes legendary-aura {
+  0%, 100% {
+    box-shadow:
+      0 0 8px 2px rgba(255, 215, 0, 0.4),
+      0 0 20px 5px rgba(255, 165, 0, 0.2);
+  }
+  50% {
+    box-shadow:
+      0 0 12px 4px rgba(255, 215, 0, 0.6),
+      0 0 30px 8px rgba(255, 165, 0, 0.35);
+  }
+}
+
+.animate-legendary-aura {
+  animation: legendary-aura 2s ease-in-out infinite;
+}
+
+@keyframes epic-aura {
+  0%, 100% {
+    box-shadow:
+      0 0 6px 2px rgba(168, 85, 247, 0.3),
+      0 0 16px 4px rgba(168, 85, 247, 0.15);
+  }
+  50% {
+    box-shadow:
+      0 0 10px 3px rgba(168, 85, 247, 0.5),
+      0 0 24px 6px rgba(168, 85, 247, 0.25);
+  }
+}
+
+.animate-epic-aura {
+  animation: epic-aura 2.5s ease-in-out infinite;
+}
+
+@keyframes rare-aura {
+  0%, 100% {
+    box-shadow:
+      0 0 4px 1px rgba(59, 130, 246, 0.3),
+      0 0 12px 3px rgba(59, 130, 246, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 8px 2px rgba(59, 130, 246, 0.45),
+      0 0 18px 5px rgba(59, 130, 246, 0.2);
+  }
+}
+
+.animate-rare-aura {
+  animation: rare-aura 3s ease-in-out infinite;
 }
 
 @keyframes particle-burst {
@@ -208,4 +307,17 @@ canvas {
   filter: blur(8px);
   z-index: -1;
   pointer-events: none;
+}
+
+@keyframes codex-rune-glow {
+  0%, 100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.15);
+  }
+}
+
+.codex-rune-animate {
+  animation: codex-rune-glow 2.5s ease-in-out infinite;
 }

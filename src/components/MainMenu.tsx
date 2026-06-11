@@ -2,8 +2,8 @@ import { getGameEngine } from '../game/GameEngine';
 import { useGameStore } from '../store/gameStore';
 import { Play, BookOpen, Sparkles, Flame, Snowflake, Zap, Layers, Clock, ZapOff, Target, Lock, TreeDeciduous, Star, Swords, Award, PawPrint, Sword } from 'lucide-react';
 import { useState } from 'react';
-import { ALL_RUNES, SKILLS } from '../data/runes';
-import type { Rune, Skill } from '../types/game';
+import { ALL_RUNES, SKILLS, RARITY_CONFIG, RARITY_ORDER } from '../data/runes';
+import type { Rune, Skill, RuneRarity } from '../types/game';
 import { getTodaysChallenge, formatTime, getGoalDescription } from '../data/challenges';
 import { getChallengeRecord } from '../game/utils/storage';
 import PetPanel from './PetPanel';
@@ -56,9 +56,139 @@ const MainMenu = () => {
   }
 
   if (showCodex) {
+    const codexGetRuneIcon = getRuneIcon;
+    
+    const renderCodexRuneCard = (rune: Rune, discovered: boolean) => {
+      const config = RARITY_CONFIG[rune.rarity];
+      return (
+        <div
+          key={rune.id}
+          className={`rounded-lg p-4 text-center border-2 transition-all relative overflow-hidden ${
+            discovered
+              ? `codex-rune-animate`
+              : 'opacity-50'
+          }`}
+          style={discovered ? {
+            background: `linear-gradient(145deg, ${config.color}10 0%, ${config.color}05 100%)`,
+            borderColor: `${config.color}50`,
+            boxShadow: config.borderGlow,
+          } : {
+            backgroundColor: 'rgba(17, 24, 39, 0.5)',
+            borderColor: 'rgba(31, 41, 55, 0.5)',
+          }}
+        >
+          <div
+            className={`w-16 h-16 mx-auto mb-3 rounded-lg border-[3px] flex items-center justify-center relative overflow-hidden ${discovered ? config.animation : ''}`}
+            style={discovered ? {
+              background: `linear-gradient(145deg, ${rune.color} 0%, ${rune.color}cc 50%, ${rune.color}99 100%)`,
+              borderColor: config.borderColor,
+              boxShadow: `${config.borderGlow}, ${config.innerShadow}`,
+            } : {
+              backgroundColor: '#374151',
+              borderColor: '#4b5563',
+            }}
+          >
+            {discovered ? (
+              <>
+                <div className="absolute inset-0" style={{
+                  background: `linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 40%, transparent 60%, rgba(0,0,0,0.15) 100%)`,
+                }} />
+                <div className="relative z-10 drop-shadow-lg">{codexGetRuneIcon(rune)}</div>
+                {rune.rarity === 'legendary' && (
+                  <>
+                    <div className="rarity-sparkle" style={{ top: '10%', left: '15%', animationDelay: '0s' }} />
+                    <div className="rarity-sparkle-diamond" style={{ top: '50%', right: '10%', animationDelay: '0.8s' }} />
+                    <div className="rarity-sparkle" style={{ bottom: '10%', left: '25%', animationDelay: '1.5s' }} />
+                  </>
+                )}
+                {rune.rarity === 'epic' && (
+                  <>
+                    <div className="rarity-sparkle" style={{ top: '15%', right: '15%', animationDelay: '0.5s' }} />
+                    <div className="rarity-sparkle-diamond" style={{ bottom: '15%', left: '15%', animationDelay: '1.2s' }} />
+                  </>
+                )}
+                {rune.rarity === 'rare' && (
+                  <>
+                    <div className="rarity-sparkle" style={{ top: '20%', right: '20%', animationDelay: '0.3s' }} />
+                    <div className="rarity-sparkle" style={{ bottom: '20%', left: '20%', animationDelay: '1.3s' }} />
+                  </>
+                )}
+              </>
+            ) : (
+              <Lock className="w-6 h-6 text-gray-500" />
+            )}
+          </div>
+          <h3 className={`font-bold mb-1 text-sm ${discovered ? 'text-white' : 'text-gray-500'}`}>
+            {discovered ? rune.name : '???'}
+          </h3>
+          {discovered && (
+            <div className="flex justify-center mb-1">
+              <div
+                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold"
+                style={{
+                  background: `linear-gradient(135deg, ${config.color}30 0%, ${config.color}15 100%)`,
+                  color: config.color,
+                  border: `1px solid ${config.color}60`,
+                  textShadow: `0 0 4px ${config.color}60`,
+                }}
+              >
+                {Array.from({ length: config.tier }, (_, i) => (
+                  <Star key={i} className="w-2 h-2" fill="currentColor" />
+                ))}
+                <span className="ml-0.5">{config.name}</span>
+              </div>
+            </div>
+          )}
+          <p className={`text-xs leading-relaxed ${discovered ? 'text-gray-400' : 'text-gray-600'}`}>
+            {discovered ? rune.description : '未发现'}
+          </p>
+        </div>
+      );
+    };
+    
+    const renderRaritySection = (rarity: RuneRarity, type: 'element' | 'effect') => {
+      const config = RARITY_CONFIG[rarity];
+      const runes = (type === 'element' ? elementRunes : effectRunes).filter(r => r.rarity === rarity);
+      if (runes.length === 0) return null;
+      const discovered = runes.filter(r => saveData.discoveredRunes.includes(r.id)).length;
+      
+      return (
+        <div className="mb-5">
+          <div className="flex items-center gap-2 mb-3">
+            <div
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-sm font-bold"
+              style={{
+                background: `linear-gradient(135deg, ${config.color}25 0%, ${config.color}10 100%)`,
+                color: config.color,
+                border: `1.5px solid ${config.color}40`,
+                boxShadow: config.borderGlow,
+                textShadow: `0 0 8px ${config.color}60`,
+              }}
+            >
+              {Array.from({ length: config.tier }, (_, i) => (
+                <Star key={i} className="w-3 h-3" fill="currentColor" />
+              ))}
+              <span className="ml-1">{config.name}</span>
+            </div>
+            <span className="text-gray-400 text-xs">
+              {discovered}/{runes.length} 已发现
+            </span>
+          </div>
+          <div className={`grid gap-3 ${
+            rarity === 'legendary' ? 'grid-cols-2 md:grid-cols-3' :
+            rarity === 'epic' ? 'grid-cols-2 md:grid-cols-3' :
+            rarity === 'rare' ? 'grid-cols-2 md:grid-cols-4' :
+            'grid-cols-2 md:grid-cols-4'
+          }`}>
+            {runes.map(rune => renderCodexRuneCard(rune, saveData.discoveredRunes.includes(rune.id)))}
+          </div>
+        </div>
+      );
+    };
+
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center p-4">
-        <div className="bg-gray-900/90 border-4 border-purple-500 rounded-xl p-8 max-w-4xl w-full max-h-[85vh] overflow-y-auto">
+        <div className="bg-gray-900/90 border-4 border-purple-500 rounded-xl p-8 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-3xl font-bold text-purple-300 flex items-center gap-2">
               <BookOpen className="w-8 h-8" />
@@ -72,78 +202,20 @@ const MainMenu = () => {
             </button>
           </div>
 
-          <div className="mb-6">
+          <div className="mb-8">
             <h3 className="text-xl font-bold text-orange-400 mb-4 flex items-center gap-2">
               <Flame className="w-5 h-5" />
               元素符文 ({saveData.discoveredRunes.filter(id => elementRunes.some(r => r.id === id)).length}/{elementRunes.length})
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {elementRunes.map((rune) => {
-                const discovered = saveData.discoveredRunes.includes(rune.id);
-                return (
-                  <div
-                    key={rune.id}
-                    className={`rounded-lg p-4 text-center border-2 transition-all ${
-                      discovered
-                        ? 'bg-gray-800 border-gray-600'
-                        : 'bg-gray-900/50 border-gray-800 opacity-60'
-                    }`}
-                  >
-                    <div
-                      className={`w-16 h-16 mx-auto mb-3 rounded-full flex items-center justify-center ${
-                        discovered ? '' : 'bg-gray-700'
-                      }`}
-                      style={discovered ? { backgroundColor: rune.color } : {}}
-                    >
-                      {discovered ? getRuneIcon(rune) : <Lock className="w-6 h-6 text-gray-500" />}
-                    </div>
-                    <h3 className={`font-bold mb-1 ${discovered ? 'text-white' : 'text-gray-500'}`}>
-                      {discovered ? rune.name : '???'}
-                    </h3>
-                    <p className={`text-xs ${discovered ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {discovered ? rune.description : '未发现'}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
+            {RARITY_ORDER.map(rarity => renderRaritySection(rarity, 'element'))}
           </div>
 
-          <div className="mb-6">
+          <div className="mb-8">
             <h3 className="text-xl font-bold text-cyan-400 mb-4 flex items-center gap-2">
               <Layers className="w-5 h-5" />
               效果符文 ({saveData.discoveredRunes.filter(id => effectRunes.some(r => r.id === id)).length}/{effectRunes.length})
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {effectRunes.map((rune) => {
-                const discovered = saveData.discoveredRunes.includes(rune.id);
-                return (
-                  <div
-                    key={rune.id}
-                    className={`rounded-lg p-4 text-center border-2 transition-all ${
-                      discovered
-                        ? 'bg-gray-800 border-gray-600'
-                        : 'bg-gray-900/50 border-gray-800 opacity-60'
-                    }`}
-                  >
-                    <div
-                      className={`w-14 h-14 mx-auto mb-3 rounded-full flex items-center justify-center ${
-                        discovered ? '' : 'bg-gray-700'
-                      }`}
-                      style={discovered ? { backgroundColor: rune.color } : {}}
-                    >
-                      {discovered ? getRuneIcon(rune) : <Lock className="w-5 h-5 text-gray-500" />}
-                    </div>
-                    <h3 className={`font-bold text-sm mb-1 ${discovered ? 'text-white' : 'text-gray-500'}`}>
-                      {discovered ? rune.name : '???'}
-                    </h3>
-                    <p className={`text-xs ${discovered ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {discovered ? rune.description : '未发现'}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
+            {RARITY_ORDER.map(rarity => renderRaritySection(rarity, 'effect'))}
           </div>
           
           <div>
@@ -155,32 +227,68 @@ const MainMenu = () => {
               {allSkills.map((skill) => {
                 const discovered = saveData.discoveredSkills.includes(skill.id);
                 const elemRune = ALL_RUNES.find(r => r.id === skill.elementRuneId);
+                const effectRune = ALL_RUNES.find(r => r.id === skill.effectRuneId);
+                const higherRarity = elemRune && effectRune
+                  ? (RARITY_CONFIG[elemRune.rarity].tier >= RARITY_CONFIG[effectRune.rarity].tier ? elemRune.rarity : effectRune.rarity)
+                  : elemRune?.rarity || 'common';
+                const skillConfig = RARITY_CONFIG[higherRarity];
                 return (
                   <div
                     key={skill.id}
                     className={`rounded-lg p-3 border transition-all ${
                       discovered
-                        ? 'bg-gray-800/50 border-gray-700'
-                        : 'bg-gray-900/30 border-gray-800 opacity-50'
+                        ? 'codex-rune-animate'
+                        : 'opacity-50'
                     }`}
+                    style={discovered ? {
+                      background: `linear-gradient(145deg, ${skillConfig.color}10 0%, transparent 100%)`,
+                      borderColor: `${skillConfig.color}40`,
+                    } : {
+                      backgroundColor: 'rgba(17, 24, 39, 0.3)',
+                      borderColor: 'rgba(31, 41, 55, 0.5)',
+                    }}
                   >
                     <div className="flex items-center gap-2">
                       {discovered && elemRune ? (
                         <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center"
-                          style={{ backgroundColor: elemRune.color }}
+                          className="w-8 h-8 rounded-lg border-2 flex items-center justify-center relative overflow-hidden"
+                          style={{
+                            background: `linear-gradient(145deg, ${elemRune.color} 0%, ${elemRune.color}cc 100%)`,
+                            borderColor: RARITY_CONFIG[elemRune.rarity].borderColor,
+                            boxShadow: RARITY_CONFIG[elemRune.rarity].borderGlow,
+                          }}
                         >
-                          {getRuneIcon(elemRune)}
+                          <div className="absolute inset-0" style={{
+                            background: `linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 50%)`,
+                          }} />
+                          <div className="relative z-10">{getRuneIcon(elemRune)}</div>
                         </div>
                       ) : (
-                        <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-lg bg-gray-700 border-2 border-gray-600 flex items-center justify-center">
                           <Lock className="w-4 h-4 text-gray-500" />
                         </div>
                       )}
                       <div className="flex-1">
-                        <span className={`font-bold text-sm ${discovered ? 'text-white' : 'text-gray-500'}`}>
-                          {discovered ? skill.name : '???'}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`font-bold text-sm ${discovered ? 'text-white' : 'text-gray-500'}`}>
+                            {discovered ? skill.name : '???'}
+                          </span>
+                          {discovered && (
+                            <div
+                              className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold"
+                              style={{
+                                background: `linear-gradient(135deg, ${skillConfig.color}30 0%, ${skillConfig.color}10 100%)`,
+                                color: skillConfig.color,
+                                border: `1px solid ${skillConfig.color}50`,
+                              }}
+                            >
+                              {Array.from({ length: skillConfig.tier }, (_, i) => (
+                                <Star key={i} className="w-1.5 h-1.5" fill="currentColor" />
+                              ))}
+                              <span className="ml-0.5">{skillConfig.name}</span>
+                            </div>
+                          )}
+                        </div>
                         <p className={`text-xs mt-0.5 ${discovered ? 'text-gray-400' : 'text-gray-600'}`}>
                           {discovered ? skill.description : '未发现'}
                         </p>
@@ -190,6 +298,7 @@ const MainMenu = () => {
                       <div className="flex gap-3 mt-2 text-xs">
                         <span className="text-red-400">伤害: {skill.damage}</span>
                         <span className="text-blue-400">冷却: {skill.cooldown / 1000}s</span>
+                        <span className="text-purple-400">范围: {skill.range}</span>
                       </div>
                     )}
                   </div>
