@@ -1,4 +1,5 @@
 import type { Monster, MonsterType, MonsterSkill, BossType, AIType, MonsterState, Position } from '../types/game';
+import { getMonsterHpForLevel, getMonsterDamageForLevel, getMonsterSpeedForLevel } from '../game/utils/combat';
 
 let monsterIdCounter = 0;
 
@@ -101,6 +102,7 @@ export const MONSTER_TEMPLATES: Record<MonsterType, {
   attackRange: number;
   fleeThreshold: number;
   maxSummons?: number;
+  element?: 'fire' | 'ice' | 'thunder';
 }> = {
   slime: {
     name: '史莱姆',
@@ -192,6 +194,7 @@ export const MONSTER_TEMPLATES: Record<MonsterType, {
     detectRange: 220,
     attackRange: 200,
     fleeThreshold: 0.25,
+    element: 'fire',
   },
   summoner: {
     name: '亡灵召唤师',
@@ -206,6 +209,7 @@ export const MONSTER_TEMPLATES: Record<MonsterType, {
     attackRange: 160,
     fleeThreshold: 0.2,
     maxSummons: 4,
+    element: 'thunder',
   },
   healer: {
     name: '暗黑牧师',
@@ -232,6 +236,7 @@ export const BOSS_TEMPLATES: Record<BossType, {
   skills: MonsterSkill[];
   detectRange: number;
   attackRange: number;
+  element?: 'fire' | 'ice' | 'thunder';
 }> = {
   stone_golem: {
     name: '石之魔像',
@@ -256,6 +261,7 @@ export const BOSS_TEMPLATES: Record<BossType, {
     dropChance: 1.0,
     detectRange: 220,
     attackRange: 50,
+    element: 'ice',
     skills: [
       { id: 'root_bind', name: '根须缠绕', damage: 10, range: 150, cooldown: 6000, currentCooldown: 0, type: 'projectile', element: 'ice', projectileSpeed: 120 },
       { id: 'nature_wrath', name: '自然之怒', damage: 20, range: 80, cooldown: 5000, currentCooldown: 0, type: 'aoe', element: 'fire', aoeRadius: 80 },
@@ -271,6 +277,7 @@ export const BOSS_TEMPLATES: Record<BossType, {
     dropChance: 1.0,
     detectRange: 250,
     attackRange: 200,
+    element: 'ice',
     skills: [
       { id: 'ice_lance', name: '冰枪术', damage: 20, range: 220, cooldown: 2500, currentCooldown: 0, type: 'projectile', element: 'ice', projectileSpeed: 280 },
       { id: 'blizzard', name: '暴风雪', damage: 15, range: 100, cooldown: 6000, currentCooldown: 0, type: 'aoe', element: 'ice', aoeRadius: 90 },
@@ -286,6 +293,7 @@ export const BOSS_TEMPLATES: Record<BossType, {
     dropChance: 1.0,
     detectRange: 230,
     attackRange: 50,
+    element: 'fire',
     skills: [
       { id: 'fireball', name: '火球术', damage: 22, range: 200, cooldown: 3000, currentCooldown: 0, type: 'projectile', element: 'fire', projectileSpeed: 250 },
       { id: 'inferno', name: '炼狱', damage: 30, range: 80, cooldown: 7000, currentCooldown: 0, type: 'aoe', element: 'fire', aoeRadius: 90 },
@@ -301,6 +309,7 @@ export const BOSS_TEMPLATES: Record<BossType, {
     dropChance: 1.0,
     detectRange: 220,
     attackRange: 180,
+    element: 'fire',
     skills: [
       { id: 'sand_storm', name: '沙暴', damage: 15, range: 100, cooldown: 5000, currentCooldown: 0, type: 'aoe', aoeRadius: 80 },
       { id: 'scarab_swarm', name: '圣甲虫群', damage: 12, range: 180, cooldown: 4000, currentCooldown: 0, type: 'projectile', projectileSpeed: 200 },
@@ -316,6 +325,7 @@ export const BOSS_TEMPLATES: Record<BossType, {
     dropChance: 1.0,
     detectRange: 250,
     attackRange: 60,
+    element: 'thunder',
     skills: [
       { id: 'crystal_breath', name: '水晶吐息', damage: 25, range: 150, cooldown: 3500, currentCooldown: 0, type: 'projectile', element: 'thunder', projectileSpeed: 300 },
       { id: 'prismatic_burst', name: '棱彩爆发', damage: 20, range: 90, cooldown: 5000, currentCooldown: 0, type: 'aoe', element: 'thunder', aoeRadius: 85 },
@@ -331,6 +341,7 @@ export const BOSS_TEMPLATES: Record<BossType, {
     dropChance: 1.0,
     detectRange: 260,
     attackRange: 200,
+    element: 'thunder',
     skills: [
       { id: 'death_ray', name: '死亡射线', damage: 28, range: 230, cooldown: 3000, currentCooldown: 0, type: 'projectile', element: 'thunder', projectileSpeed: 320 },
       { id: 'soul_drain', name: '灵魂汲取', damage: 20, range: 80, cooldown: 6000, currentCooldown: 0, type: 'aoe', aoeRadius: 70 },
@@ -347,6 +358,7 @@ export const BOSS_TEMPLATES: Record<BossType, {
     dropChance: 1.0,
     detectRange: 200,
     attackRange: 50,
+    element: 'fire',
     skills: [
       { id: 'poison_spit', name: '毒液喷射', damage: 18, range: 160, cooldown: 3000, currentCooldown: 0, type: 'projectile', element: 'fire', projectileSpeed: 220 },
       { id: 'acid_pool', name: '酸液池', damage: 22, range: 80, cooldown: 5000, currentCooldown: 0, type: 'aoe', aoeRadius: 75 },
@@ -367,18 +379,24 @@ const getInitialState = (aiType: AIType): MonsterState => {
 export const createMonster = (
   type: MonsterType,
   position: Position,
-  levelMultiplier: number = 1
+  level: number = 1,
+  difficultyHpMultiplier: number = 1,
+  difficultyDamageMultiplier: number = 1,
+  levelMultiplierBonus: number = 0
 ): Monster => {
   const template = MONSTER_TEMPLATES[type];
   monsterIdCounter++;
+  const hp = getMonsterHpForLevel(template.hp, level, difficultyHpMultiplier, levelMultiplierBonus);
+  const damage = getMonsterDamageForLevel(template.damage, level, difficultyDamageMultiplier, levelMultiplierBonus);
+  const speed = getMonsterSpeedForLevel(template.speed, level);
   return {
     id: `monster_${monsterIdCounter}_${Date.now()}`,
     name: template.name,
     type,
-    hp: Math.floor(template.hp * levelMultiplier),
-    maxHp: Math.floor(template.hp * levelMultiplier),
-    damage: Math.floor(template.damage * levelMultiplier),
-    speed: template.speed,
+    hp,
+    maxHp: hp,
+    damage,
+    speed,
     position: { ...position },
     aiType: template.aiType,
     state: getInitialState(template.aiType),
@@ -399,25 +417,32 @@ export const createMonster = (
     maxSummons: (template as any).maxSummons || 0,
     fleeThreshold: template.fleeThreshold,
     stateCooldown: 0,
+    element: template.element,
   };
 };
 
 export const createBoss = (
   bossType: BossType,
   position: Position,
-  levelMultiplier: number = 1
+  level: number = 1,
+  difficultyHpMultiplier: number = 1,
+  difficultyDamageMultiplier: number = 1,
+  levelMultiplierBonus: number = 0
 ): Monster => {
   const template = BOSS_TEMPLATES[bossType];
   monsterIdCounter++;
+  const hp = getMonsterHpForLevel(template.hp, level, difficultyHpMultiplier, levelMultiplierBonus);
+  const damage = getMonsterDamageForLevel(template.damage, level, difficultyDamageMultiplier, levelMultiplierBonus);
+  const speed = getMonsterSpeedForLevel(template.speed, level);
   return {
     id: `boss_${monsterIdCounter}_${Date.now()}`,
     name: template.name,
     type: 'skeleton',
     bossType,
-    hp: Math.floor(template.hp * levelMultiplier),
-    maxHp: Math.floor(template.hp * levelMultiplier),
-    damage: Math.floor(template.damage * levelMultiplier),
-    speed: template.speed,
+    hp,
+    maxHp: hp,
+    damage,
+    speed,
     position: { ...position },
     aiType: 'boss',
     state: 'idle',
@@ -438,6 +463,7 @@ export const createBoss = (
     maxSummons: 6,
     fleeThreshold: 0,
     stateCooldown: 0,
+    element: template.element,
   };
 };
 

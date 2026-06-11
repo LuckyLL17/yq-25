@@ -341,6 +341,7 @@ export interface Monster {
   fleeThreshold: number;
   ownerId?: string;
   stateCooldown: number;
+  element?: 'fire' | 'ice' | 'thunder';
 }
 
 export type ChestType = 'normal' | 'rare' | 'epic';

@@ -1,7 +1,7 @@
 import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, MonsterSkill, MonsterProjectile, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, ShopItem, ClassType, PlayerClass, GameAction, AdventureDifficulty, MonsterState, SkillVFX, ScreenFlash, ColorFilter, ChantState } from '../types/game';
 import { GAME_CONFIG } from '../data/config';
 import { generateDungeon, generateMonsters, generateChests, getPlayerStartPosition, updateFOV, isWalkable } from './utils/dungeon';
-import { getRandomRunes, createSkill, ALL_RUNES, SKILLS, getRuneById } from '../data/runes';
+import { getRandomRunes, createSkill, ALL_RUNES, SKILLS, getRuneById, getSkillWithRarityBonus } from '../data/runes';
 import { createMonster } from '../data/monsters';
 import { calculateTalentEffects } from '../data/talents';
 import { getClassById, getClassStartingRunes } from '../data/classes';
@@ -13,6 +13,13 @@ import { getDifficultyConfig, getTalentPointsReward, getGoldReward } from '../da
 import { getEquipmentTemplatesForDifficulty, getRandomEquipment, getEquipmentTemplate } from '../data/equipment';
 import { getRandomPotion, getRandomMaterial, createPotion, getPotionTemplate, getRecipeByPotionId } from '../data/potions';
 import { getAudioManager } from './AudioManager';
+import { 
+  calculateEquipmentStats, 
+  calculatePlayerCombatStats, 
+  calculatePlayerDamage, 
+  calculateMonsterDamage,
+  getElementMultiplier,
+} from './utils/combat';
 
 export class GameEngine {
   private canvas: HTMLCanvasElement | null = null;
@@ -314,7 +321,7 @@ export class GameEngine {
       }
 
       if (monster.attackRange <= 40 && dist < 30 && player.invincible <= 0 && monster.currentAttackCooldown <= 0) {
-        this.damagePlayer(monster.damage);
+        this.damagePlayer(monster.damage, monster.element);
         monster.currentAttackCooldown = monster.attackCooldown;
       }
 
@@ -558,7 +565,7 @@ export class GameEngine {
       } else {
         if (this.tryChangeState(monster, 'attack', 300, 100)) {
           if (distToPlayer < 40 && this.state.player.invincible <= 0 && monster.currentAttackCooldown <= 0) {
-            this.damagePlayer(monster.damage * (isEnraged ? 1.5 : 1));
+            this.damagePlayer(monster.damage * (isEnraged ? 1.5 : 1), monster.element);
             monster.currentAttackCooldown = monster.attackCooldown * (isEnraged ? 0.6 : 1);
           }
         }
@@ -644,7 +651,7 @@ export class GameEngine {
           position: { ...monster.position },
           velocity: { x: dir.x * speed, y: dir.y * speed },
           damage: skill.damage,
-          element: skill.element,
+          element: skill.element || monster.element,
           range: skill.range || 150,
           traveled: 0,
           size: monster.isBoss ? 8 : 5,
@@ -676,7 +683,7 @@ export class GameEngine {
           );
         }
         if (dist < radius && this.state.player.invincible <= 0) {
-          this.damagePlayer(skill.damage);
+          this.damagePlayer(skill.damage, skill.element || monster.element);
         }
         break;
       }
@@ -689,12 +696,14 @@ export class GameEngine {
         if (currentSummons >= maxAllowed) return;
 
         const actualCount = Math.min(count, maxAllowed - currentSummons);
+        const currentLevel = this.state.currentLevel;
+        const diffConfig = getDifficultyConfig(this.state.difficulty);
         for (let i = 0; i < actualCount; i++) {
           const angle = (Math.PI * 2 * i) / actualCount;
           const spawnX = monster.position.x + Math.cos(angle) * 40;
           const spawnY = monster.position.y + Math.sin(angle) * 40;
           if (this.state.dungeon && isWalkable(this.state.dungeon, spawnX, spawnY)) {
-            const summon = createMonster(summonType, { x: spawnX, y: spawnY }, 0.6);
+            const summon = createMonster(summonType, { x: spawnX, y: spawnY }, currentLevel, diffConfig.hpMultiplier * 0.6, diffConfig.damageMultiplier * 0.6, diffConfig.levelMultiplierBonus);
             summon.ownerId = monster.id;
             summon.detectRange = Math.max(summon.detectRange, 120);
             this.state.monsters.push(summon);
@@ -786,7 +795,7 @@ export class GameEngine {
 
       const distToPlayer = distance(proj.position, this.state.player.position);
       if (distToPlayer < 20 + proj.size && this.state.player.invincible <= 0) {
-        this.damagePlayer(proj.damage);
+        this.damagePlayer(proj.damage, proj.element);
         this.addScreenFlash(proj.color, 0.2, 150);
         this.state.monsterProjectiles.splice(i, 1);
         continue;
@@ -1723,7 +1732,7 @@ export class GameEngine {
       
       const goldAmount = Math.floor(20 + this.state.currentLevel * 10 + Math.random() * 30);
       const adjustedGold = getGoldReward(goldAmount, this.state.difficulty);
-      const equipmentStats = this.getEquipmentStats();
+      const equipmentStats = calculateEquipmentStats(this.state.equippedEquipment);
       const saveData = loadSaveData();
       const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
       const goldBonus = 1 + talentEffects.goldBonus + equipmentStats.goldBonus;
@@ -2902,30 +2911,28 @@ export class GameEngine {
   ) {
     const saveData = loadSaveData();
     const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
-    const equipmentStats = this.getEquipmentStats();
+    const equipmentStats = calculateEquipmentStats(this.state.equippedEquipment);
     const classStats = this.getClassStats();
     
-    let finalDamage = damage;
-    let actuallyCrit = isCrit;
+    const combatStats = calculatePlayerCombatStats(classStats, equipmentStats, talentEffects);
     
-    const baseDamageMultiplier = classStats.attack * (1 + talentEffects.damage + (equipmentStats.attack / 100));
-    finalDamage = Math.floor(finalDamage * baseDamageMultiplier);
+    const damageResult = calculatePlayerDamage(
+      damage,
+      combatStats,
+      element,
+      monster.element,
+      isCrit,
+      this.state.player.damageBoostTimer > 0 ? this.state.player.damageBoostPercent : 0
+    );
     
-    const totalCritChance = classStats.critChance + talentEffects.critChance + equipmentStats.critChance;
-    const totalCritDamage = classStats.critDamage + talentEffects.critDamage + equipmentStats.critDamage;
+    let finalDamage = damageResult.damage;
+    let actuallyCrit = damageResult.isCrit;
+    const elementMultiplier = damageResult.elementMultiplier;
     
-    if (!isCrit && totalCritChance > 0) {
-      if (Math.random() < totalCritChance) {
-        actuallyCrit = true;
-        const critMultiplier = 2 + totalCritDamage;
-        finalDamage = Math.floor(finalDamage * critMultiplier);
-      }
-    } else if (isCrit) {
-      finalDamage = Math.floor(finalDamage * (2 + totalCritDamage));
-    }
-    
-    if (this.state.player.damageBoostTimer > 0) {
-      finalDamage = Math.floor(finalDamage * (1 + this.state.player.damageBoostPercent / 100));
+    if (elementMultiplier > 1) {
+      const superText = `克制! x${elementMultiplier}`;
+    } else if (elementMultiplier < 1) {
+      const resistText = `抵抗! x${elementMultiplier}`;
     }
     
     monster.hp -= finalDamage;
@@ -3043,26 +3050,33 @@ export class GameEngine {
     }
   }
   
-  private damagePlayer(damage: number) {
+  private getPlayerPrimaryElement(): string | undefined {
+    const equippedRunes = this.state.equippedRunes.filter(Boolean) as any[];
+    const elementRunes = equippedRunes.filter(r => r.type === 'element');
+    if (elementRunes.length > 0) {
+      return elementRunes[0].element;
+    }
+    return undefined;
+  }
+
+  private damagePlayer(damage: number, attackerElement?: string) {
     if (this.state.player.invincible > 0) return;
     
     const saveData = loadSaveData();
     const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
-    const equipmentStats = this.getEquipmentStats();
+    const equipmentStats = calculateEquipmentStats(this.state.equippedEquipment);
     const classStats = this.getClassStats();
     
-    let finalDamage = damage;
+    const combatStats = calculatePlayerCombatStats(classStats, equipmentStats, talentEffects);
+    const playerElement = this.getPlayerPrimaryElement();
     
-    const classDefenseReduction = Math.min(0.5, (classStats.defense - 1) * 0.3);
-    const equipmentDefenseReduction = Math.min(0.5, equipmentStats.defense / 100);
-    const totalDefenseReduction = Math.min(0.8, classDefenseReduction + equipmentDefenseReduction);
-    finalDamage = Math.floor(finalDamage * (1 - totalDefenseReduction));
-    
-    finalDamage = Math.max(1, Math.floor(finalDamage * (1 - talentEffects.damageReduction)));
-    
-    if (this.state.player.shieldTimer > 0) {
-      finalDamage = Math.max(1, Math.floor(finalDamage * 0.5));
-    }
+    const finalDamage = calculateMonsterDamage(
+      damage,
+      attackerElement,
+      playerElement,
+      combatStats,
+      this.state.player.shieldTimer > 0
+    );
     
     this.state.player.hp -= finalDamage;
     this.state.player.invincible = GAME_CONFIG.INVINCIBLE_DURATION;
@@ -3232,13 +3246,14 @@ export class GameEngine {
       for (const effRune of effectRunes) {
         const skill = createSkill(elemRune, effRune);
         if (skill) {
+          const skillWithRarity = getSkillWithRarityBonus(skill, elemRune.rarity, effRune.rarity);
           const damageMultiplier = 1 + talentEffects.damage;
           const cooldownMultiplier = 1 - talentEffects.attackSpeed;
           
-          skill.damage = Math.floor(skill.damage * damageMultiplier);
-          skill.cooldown = Math.floor(skill.cooldown * Math.max(0.5, cooldownMultiplier));
+          skillWithRarity.damage = Math.floor(skillWithRarity.damage * damageMultiplier);
+          skillWithRarity.cooldown = Math.floor(skillWithRarity.cooldown * Math.max(0.5, cooldownMultiplier));
           
-          skills.push(skill);
+          skills.push(skillWithRarity);
           discoverSkill(skill.id);
         }
       }

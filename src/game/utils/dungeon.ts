@@ -521,7 +521,6 @@ export const generateMonsters = (dungeon: Dungeon, level: number, difficulty: Ad
   const monsters: Monster[] = [];
   const baseCount = GAME_CONFIG.MONSTERS_PER_LEVEL + Math.floor(level * 1.5);
   const count = Math.floor(baseCount * diffConfig.countMultiplier);
-  const levelMultiplier = (1 + (level - 1) * 0.3 + diffConfig.levelMultiplierBonus) * diffConfig.hpMultiplier;
 
   const firstRoom = dungeon.rooms[0];
   const lastRoom = dungeon.rooms[dungeon.rooms.length - 1];
@@ -535,9 +534,7 @@ export const generateMonsters = (dungeon: Dungeon, level: number, difficulty: Ad
     const monster = createMonster(type, {
       x: position.x * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE / 2,
       y: position.y * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE / 2,
-    }, levelMultiplier);
-
-    monster.damage = Math.floor(monster.damage * diffConfig.damageMultiplier);
+    }, level, diffConfig.hpMultiplier, diffConfig.damageMultiplier, diffConfig.levelMultiplierBonus);
 
     monsters.push(monster);
   }
@@ -547,8 +544,7 @@ export const generateMonsters = (dungeon: Dungeon, level: number, difficulty: Ad
     x: lastRoom.centerX * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE / 2,
     y: lastRoom.centerY * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE / 2,
   };
-  const boss = createBoss(bossType, bossPos, levelMultiplier);
-  boss.damage = Math.floor(boss.damage * diffConfig.damageMultiplier);
+  const boss = createBoss(bossType, bossPos, level, diffConfig.hpMultiplier, diffConfig.damageMultiplier, diffConfig.levelMultiplierBonus);
   monsters.push(boss);
 
   return monsters;
