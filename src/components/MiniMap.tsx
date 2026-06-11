@@ -100,9 +100,9 @@ const MiniMap = () => {
         ) {
           const drawX = offsetX + tileX * tileSize + tileSize / 2;
           const drawY = offsetY + tileY * tileSize + tileSize / 2;
-          const size = Math.max(2, tileSize * 0.5);
+          const size = monster.isBoss ? Math.max(3, tileSize * 0.7) : Math.max(2, tileSize * 0.5);
 
-          ctx.fillStyle = '#ef4444';
+          ctx.fillStyle = monster.isBoss ? '#ffd700' : '#ef4444';
           ctx.beginPath();
           ctx.arc(drawX, drawY, size / 2, 0, Math.PI * 2);
           ctx.fill();

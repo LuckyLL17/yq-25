@@ -236,8 +236,39 @@ export interface Skill {
   description: string;
 }
 
-export type MonsterType = 'slime' | 'bat' | 'skeleton' | 'ghost' | 'goblin';
-export type AIType = 'passive' | 'aggressive' | 'patrol';
+export type MonsterType = 'slime' | 'bat' | 'skeleton' | 'ghost' | 'goblin' | 'archer' | 'caster' | 'summoner' | 'healer';
+export type BossType = 'stone_golem' | 'forest_guardian' | 'ice_witch' | 'fire_demon' | 'sand_pharaoh' | 'crystal_dragon' | 'ancient_lich' | 'swamp_hydra';
+export type AIType = 'passive' | 'aggressive' | 'patrol' | 'ranged' | 'caster' | 'summoner' | 'healer' | 'boss';
+export type MonsterState = 'idle' | 'chase' | 'attack' | 'flee' | 'cast' | 'heal' | 'summon';
+
+export interface MonsterSkill {
+  id: string;
+  name: string;
+  damage: number;
+  range: number;
+  cooldown: number;
+  currentCooldown: number;
+  type: 'projectile' | 'aoe' | 'summon' | 'heal' | 'buff';
+  element?: 'fire' | 'ice' | 'thunder';
+  projectileSpeed?: number;
+  aoeRadius?: number;
+  summonType?: MonsterType;
+  summonCount?: number;
+  healPercent?: number;
+}
+
+export interface MonsterProjectile {
+  id: string;
+  position: Position;
+  velocity: Position;
+  damage: number;
+  element?: 'fire' | 'ice' | 'thunder';
+  range: number;
+  traveled: number;
+  size: number;
+  color: string;
+  sourceId: string;
+}
 
 export type PetType = 'fire_dragonling' | 'ice_sprite' | 'thunder_bird' | 'shadow_cat';
 
@@ -284,12 +315,14 @@ export interface Monster {
   id: string;
   name: string;
   type: MonsterType;
+  bossType?: BossType;
   hp: number;
   maxHp: number;
   damage: number;
   speed: number;
   position: Position;
   aiType: AIType;
+  state: MonsterState;
   color: string;
   dropChance: number;
   attackCooldown: number;
@@ -298,6 +331,14 @@ export interface Monster {
   direction: number;
   animFrame: number;
   animTimer: number;
+  isBoss: boolean;
+  skills: MonsterSkill[];
+  detectRange: number;
+  attackRange: number;
+  stateTimer: number;
+  summonCount: number;
+  maxSummons: number;
+  fleeThreshold: number;
 }
 
 export type ChestType = 'normal' | 'rare' | 'epic';
@@ -421,6 +462,7 @@ export interface GameState {
   chests: Chest[];
   pet: Pet | null;
   projectiles: Projectile[];
+  monsterProjectiles: MonsterProjectile[];
   particles: Particle[];
   damageNumbers: DamageNumber[];
   runeInventory: Rune[];

@@ -2,7 +2,7 @@ import type { Dungeon, Tile, Room, Position, Chest, Monster, Shop, RoomShape, De
 import type { AdventureDifficulty } from '../../types/game';
 import { GAME_CONFIG, DUNGEON_THEMES, ROOM_SHAPE_WEIGHTS, CORRIDOR_STYLE_WEIGHTS, getThemeForLevel } from '../../data/config';
 import { randomInt, randomRange } from './math';
-import { createMonster, getRandomMonsterType } from '../../data/monsters';
+import { createMonster, getRandomMonsterType, createBoss, getBossForLevel } from '../../data/monsters';
 import { getRandomRune } from '../../data/runes';
 import { createShop, SHOP_SPAWN_CHANCE } from '../../data/shop';
 import { getDifficultyConfig } from '../../data/difficulty';
@@ -522,25 +522,35 @@ export const generateMonsters = (dungeon: Dungeon, level: number, difficulty: Ad
   const baseCount = GAME_CONFIG.MONSTERS_PER_LEVEL + Math.floor(level * 1.5);
   const count = Math.floor(baseCount * diffConfig.countMultiplier);
   const levelMultiplier = (1 + (level - 1) * 0.3 + diffConfig.levelMultiplierBonus) * diffConfig.hpMultiplier;
-  
+
   const firstRoom = dungeon.rooms[0];
-  const excludeRooms = [firstRoom];
-  
+  const lastRoom = dungeon.rooms[dungeon.rooms.length - 1];
+  const excludeRooms = [firstRoom, lastRoom];
+
   for (let i = 0; i < count; i++) {
     const position = getRandomFloorPosition(dungeon, excludeRooms);
     if (!position) continue;
-    
+
     const type = getRandomMonsterType(level);
     const monster = createMonster(type, {
       x: position.x * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE / 2,
       y: position.y * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE / 2,
     }, levelMultiplier);
-    
+
     monster.damage = Math.floor(monster.damage * diffConfig.damageMultiplier);
-    
+
     monsters.push(monster);
   }
-  
+
+  const bossType = getBossForLevel(level);
+  const bossPos = {
+    x: lastRoom.centerX * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE / 2,
+    y: lastRoom.centerY * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE / 2,
+  };
+  const boss = createBoss(bossType, bossPos, levelMultiplier);
+  boss.damage = Math.floor(boss.damage * diffConfig.damageMultiplier);
+  monsters.push(boss);
+
   return monsters;
 };
 

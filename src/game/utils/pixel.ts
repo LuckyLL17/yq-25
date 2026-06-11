@@ -115,8 +115,15 @@ export const drawMonster = (
   y: number,
   color: string,
   animFrame: number,
-  scale: number = 2
+  scale: number = 2,
+  isBoss: boolean = false,
+  bossType?: string
 ) => {
+  if (isBoss) {
+    drawBoss(ctx, bossType || '', x, y, color, animFrame, scale);
+    return;
+  }
+
   const s = scale;
   const px = Math.floor(x - 8 * s);
   const py = Math.floor(y - 8 * s);
@@ -185,10 +192,240 @@ export const drawMonster = (
       ctx.fillStyle = '#dfe4ea';
       ctx.fillRect(px + 6 * s, py + 6 * s + bounce, 4 * s, s);
       break;
+
+    case 'archer':
+      ctx.fillStyle = color;
+      ctx.fillRect(px + 5 * s, py + 2 * s + bounce, 6 * s, 5 * s);
+      ctx.fillRect(px + 4 * s, py + 7 * s + bounce, 8 * s, 5 * s);
+      ctx.fillRect(px + 5 * s, py + 12 * s, 2 * s, 2 * s);
+      ctx.fillRect(px + 9 * s, py + 12 * s, 2 * s, 2 * s);
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(px + 6 * s, py + 4 * s + bounce, 2 * s, 2 * s);
+      ctx.fillRect(px + 8 * s, py + 4 * s + bounce, 2 * s, 2 * s);
+      ctx.fillStyle = '#8b4513';
+      ctx.fillRect(px + 0 * s, py + 4 * s + bounce, 5 * s, s);
+      ctx.fillRect(px + 0 * s, py + 3 * s + bounce, s, 3 * s);
+      ctx.fillStyle = '#daa520';
+      ctx.fillRect(px + 0 * s, py + 3 * s + bounce, s, s);
+      break;
+
+    case 'caster':
+      ctx.fillStyle = color;
+      ctx.fillRect(px + 4 * s, py + 3 * s + bounce, 8 * s, 9 * s);
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(px + 4 * s, py + 2 * s + bounce, 8 * s, 3 * s);
+      ctx.fillStyle = '#d63031';
+      ctx.fillRect(px + 5 * s, py + 5 * s + bounce, 2 * s, 2 * s);
+      ctx.fillRect(px + 9 * s, py + 5 * s + bounce, 2 * s, 2 * s);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.6;
+      ctx.fillRect(px + 0 * s, py + 4 * s + bounce, 4 * s, s);
+      ctx.fillRect(px + 12 * s, py + 4 * s + bounce, 4 * s, s);
+      ctx.globalAlpha = 1;
+      break;
+
+    case 'summoner':
+      ctx.fillStyle = color;
+      ctx.fillRect(px + 4 * s, py + 2 * s + bounce, 8 * s, 10 * s);
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(px + 3 * s, py + 1 * s + bounce, 10 * s, 3 * s);
+      ctx.fillStyle = '#e056a0';
+      ctx.fillRect(px + 5 * s, py + 4 * s + bounce, 2 * s, 2 * s);
+      ctx.fillRect(px + 9 * s, py + 4 * s + bounce, 2 * s, 2 * s);
+      ctx.fillStyle = '#6c5ce7';
+      ctx.globalAlpha = 0.5;
+      for (let i = 0; i < 3; i++) {
+        const orbY = py + (2 + Math.sin(Date.now() / 300 + i * 2) * 2) * s;
+        ctx.fillRect(px + (1 + i * 5) * s, orbY, 2 * s, 2 * s);
+      }
+      ctx.globalAlpha = 1;
+      break;
+
+    case 'healer':
+      ctx.fillStyle = color;
+      ctx.fillRect(px + 4 * s, py + 2 * s + bounce, 8 * s, 5 * s);
+      ctx.fillRect(px + 3 * s, py + 7 * s + bounce, 10 * s, 6 * s);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(px + 5 * s, py + 4 * s + bounce, 2 * s, 2 * s);
+      ctx.fillRect(px + 9 * s, py + 4 * s + bounce, 2 * s, 2 * s);
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(px + 5 * s, py + 4 * s + bounce, s, s);
+      ctx.fillRect(px + 10 * s, py + 4 * s + bounce, s, s);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(px + 7 * s, py + 7 * s + bounce, 2 * s, 4 * s);
+      ctx.fillRect(px + 6 * s, py + 8 * s + bounce, 4 * s, 2 * s);
+      break;
       
     default:
       ctx.fillStyle = color;
       ctx.fillRect(px + 4 * s, py + 4 * s, 8 * s, 8 * s);
+  }
+};
+
+export const drawBoss = (
+  ctx: CanvasRenderingContext2D,
+  bossType: string,
+  x: number,
+  y: number,
+  color: string,
+  animFrame: number,
+  scale: number = 2
+) => {
+  const s = scale * 1.5;
+  const px = Math.floor(x - 10 * s);
+  const py = Math.floor(y - 10 * s);
+  const bounce = animFrame % 2 === 0 ? 0 : -s;
+
+  ctx.fillStyle = color;
+
+  switch (bossType) {
+    case 'stone_golem':
+      ctx.fillRect(px + 4 * s, py + 3 * s + bounce, 12 * s, 14 * s);
+      ctx.fillStyle = '#4a4a4a';
+      ctx.fillRect(px + 2 * s, py + 6 * s + bounce, 2 * s, 8 * s);
+      ctx.fillRect(px + 16 * s, py + 6 * s + bounce, 2 * s, 8 * s);
+      ctx.fillStyle = '#ff6b35';
+      ctx.fillRect(px + 6 * s, py + 6 * s + bounce, 3 * s, 2 * s);
+      ctx.fillRect(px + 11 * s, py + 6 * s + bounce, 3 * s, 2 * s);
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(px + 7 * s, py + 7 * s + bounce, s, s);
+      ctx.fillRect(px + 12 * s, py + 7 * s + bounce, s, s);
+      ctx.fillStyle = '#636e72';
+      ctx.fillRect(px + 5 * s, py + 1 * s + bounce, 10 * s, 3 * s);
+      break;
+
+    case 'forest_guardian':
+      ctx.fillRect(px + 4 * s, py + 4 * s + bounce, 12 * s, 12 * s);
+      ctx.fillStyle = '#1e8449';
+      ctx.fillRect(px + 2 * s, py + 2 * s + bounce, 4 * s, 6 * s);
+      ctx.fillRect(px + 14 * s, py + 2 * s + bounce, 4 * s, 6 * s);
+      ctx.fillStyle = '#27ae60';
+      ctx.fillRect(px + 0 * s, py + 0 * s + bounce, 3 * s, 3 * s);
+      ctx.fillRect(px + 17 * s, py + 0 * s + bounce, 3 * s, 3 * s);
+      ctx.fillStyle = '#f1c40f';
+      ctx.fillRect(px + 6 * s, py + 7 * s + bounce, 3 * s, 2 * s);
+      ctx.fillRect(px + 11 * s, py + 7 * s + bounce, 3 * s, 2 * s);
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(px + 7 * s, py + 8 * s + bounce, s, s);
+      ctx.fillRect(px + 12 * s, py + 8 * s + bounce, s, s);
+      break;
+
+    case 'ice_witch':
+      ctx.globalAlpha = 0.8;
+      ctx.fillRect(px + 5 * s, py + 3 * s + bounce, 10 * s, 12 * s);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#0984e3';
+      ctx.fillRect(px + 5 * s, py + 1 * s + bounce, 10 * s, 4 * s);
+      ctx.fillRect(px + 7 * s, py + 0 * s + bounce, 6 * s, 2 * s);
+      ctx.fillStyle = '#74b9ff';
+      ctx.fillRect(px + 6 * s, py + 5 * s + bounce, 3 * s, 2 * s);
+      ctx.fillRect(px + 11 * s, py + 5 * s + bounce, 3 * s, 2 * s);
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(px + 7 * s, py + 6 * s + bounce, s, s);
+      ctx.fillRect(px + 12 * s, py + 6 * s + bounce, s, s);
+      ctx.fillStyle = '#dfe6e9';
+      ctx.fillRect(px + 3 * s, py + 4 * s + bounce, 2 * s, 8 * s);
+      ctx.fillRect(px + 15 * s, py + 4 * s + bounce, 2 * s, 8 * s);
+      break;
+
+    case 'fire_demon':
+      ctx.fillRect(px + 4 * s, py + 4 * s + bounce, 12 * s, 12 * s);
+      ctx.fillStyle = '#c0392b';
+      ctx.fillRect(px + 2 * s, py + 2 * s + bounce, 4 * s, 4 * s);
+      ctx.fillRect(px + 14 * s, py + 2 * s + bounce, 4 * s, 4 * s);
+      ctx.fillStyle = '#ff6b35';
+      ctx.fillRect(px + 2 * s, py + 0 * s + bounce, 3 * s, 3 * s);
+      ctx.fillRect(px + 5 * s, py + -1 * s + bounce, 3 * s, 2 * s);
+      ctx.fillRect(px + 12 * s, py + -1 * s + bounce, 3 * s, 2 * s);
+      ctx.fillRect(px + 15 * s, py + 0 * s + bounce, 3 * s, 3 * s);
+      ctx.fillStyle = '#ffe66d';
+      ctx.fillRect(px + 6 * s, py + 7 * s + bounce, 3 * s, 2 * s);
+      ctx.fillRect(px + 11 * s, py + 7 * s + bounce, 3 * s, 2 * s);
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(px + 7 * s, py + 8 * s + bounce, s, s);
+      ctx.fillRect(px + 12 * s, py + 8 * s + bounce, s, s);
+      break;
+
+    case 'sand_pharaoh':
+      ctx.fillStyle = '#f39c12';
+      ctx.fillRect(px + 4 * s, py + 3 * s + bounce, 12 * s, 13 * s);
+      ctx.fillStyle = '#e67e22';
+      ctx.fillRect(px + 4 * s, py + 1 * s + bounce, 12 * s, 4 * s);
+      ctx.fillStyle = '#f1c40f';
+      ctx.fillRect(px + 7 * s, py + 0 * s + bounce, 6 * s, 2 * s);
+      ctx.fillStyle = '#d35400';
+      ctx.fillRect(px + 6 * s, py + 6 * s + bounce, 3 * s, 2 * s);
+      ctx.fillRect(px + 11 * s, py + 6 * s + bounce, 3 * s, 2 * s);
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(px + 7 * s, py + 7 * s + bounce, s, s);
+      ctx.fillRect(px + 12 * s, py + 7 * s + bounce, s, s);
+      ctx.fillStyle = '#daa520';
+      ctx.fillRect(px + 8 * s, py + 9 * s + bounce, 4 * s, 2 * s);
+      ctx.fillRect(px + 9 * s, py + 8 * s + bounce, 2 * s, s);
+      break;
+
+    case 'crystal_dragon':
+      ctx.fillRect(px + 3 * s, py + 4 * s + bounce, 14 * s, 10 * s);
+      ctx.fillStyle = '#8c7ae6';
+      ctx.fillRect(px + 5 * s, py + 2 * s + bounce, 10 * s, 4 * s);
+      ctx.fillRect(px + 7 * s, py + 0 * s + bounce, 6 * s, 3 * s);
+      ctx.fillStyle = '#dfe6e9';
+      ctx.fillRect(px + 0 * s, py + 5 * s + bounce, 3 * s, 6 * s);
+      ctx.fillRect(px + 17 * s, py + 5 * s + bounce, 3 * s, 6 * s);
+      ctx.fillStyle = '#ffe66d';
+      ctx.fillRect(px + 6 * s, py + 5 * s + bounce, 3 * s, 3 * s);
+      ctx.fillRect(px + 11 * s, py + 5 * s + bounce, 3 * s, 3 * s);
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(px + 7 * s, py + 6 * s + bounce, s, s);
+      ctx.fillRect(px + 12 * s, py + 6 * s + bounce, s, s);
+      break;
+
+    case 'ancient_lich':
+      ctx.globalAlpha = 0.8;
+      ctx.fillRect(px + 5 * s, py + 3 * s + bounce, 10 * s, 12 * s);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(px + 5 * s, py + 1 * s + bounce, 10 * s, 4 * s);
+      ctx.fillRect(px + 7 * s, py + 0 * s + bounce, 6 * s, 2 * s);
+      ctx.fillStyle = '#6c5ce7';
+      ctx.fillRect(px + 6 * s, py + 5 * s + bounce, 3 * s, 3 * s);
+      ctx.fillRect(px + 11 * s, py + 5 * s + bounce, 3 * s, 3 * s);
+      ctx.fillStyle = '#ff6b35';
+      ctx.fillRect(px + 7 * s, py + 6 * s + bounce, s, s);
+      ctx.fillRect(px + 12 * s, py + 6 * s + bounce, s, s);
+      ctx.fillStyle = '#a29bfe';
+      ctx.globalAlpha = 0.4;
+      ctx.fillRect(px + 1 * s, py + 3 * s + bounce, 4 * s, 10 * s);
+      ctx.fillRect(px + 15 * s, py + 3 * s + bounce, 4 * s, 10 * s);
+      ctx.globalAlpha = 1;
+      break;
+
+    case 'swamp_hydra':
+      ctx.fillRect(px + 2 * s, py + 5 * s + bounce, 16 * s, 10 * s);
+      ctx.fillStyle = '#1e8449';
+      ctx.fillRect(px + 3 * s, py + 2 * s + bounce, 4 * s, 5 * s);
+      ctx.fillRect(px + 13 * s, py + 2 * s + bounce, 4 * s, 5 * s);
+      ctx.fillRect(px + 8 * s, py + 1 * s + bounce, 4 * s, 5 * s);
+      ctx.fillStyle = '#f1c40f';
+      ctx.fillRect(px + 4 * s, py + 3 * s + bounce, 2 * s, 2 * s);
+      ctx.fillRect(px + 14 * s, py + 3 * s + bounce, 2 * s, 2 * s);
+      ctx.fillRect(px + 9 * s, py + 2 * s + bounce, 2 * s, 2 * s);
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(px + 4 * s, py + 4 * s + bounce, s, s);
+      ctx.fillRect(px + 14 * s, py + 4 * s + bounce, s, s);
+      ctx.fillRect(px + 9 * s, py + 3 * s + bounce, s, s);
+      ctx.fillStyle = '#27ae60';
+      ctx.fillRect(px + 0 * s, py + 12 * s + bounce, 4 * s, 3 * s);
+      ctx.fillRect(px + 6 * s, py + 13 * s + bounce, 4 * s, 2 * s);
+      ctx.fillRect(px + 10 * s, py + 13 * s + bounce, 4 * s, 2 * s);
+      ctx.fillRect(px + 16 * s, py + 12 * s + bounce, 4 * s, 3 * s);
+      break;
+
+    default:
+      ctx.fillRect(px + 3 * s, py + 3 * s, 14 * s, 14 * s);
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(px + 6 * s, py + 6 * s, 3 * s, 3 * s);
+      ctx.fillRect(px + 11 * s, py + 6 * s, 3 * s, 3 * s);
   }
 };
 

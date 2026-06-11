@@ -1,7 +1,8 @@
-import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, ShopItem, ClassType, PlayerClass, GameAction, AdventureDifficulty } from '../types/game';
+import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, MonsterSkill, MonsterProjectile, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, ShopItem, ClassType, PlayerClass, GameAction, AdventureDifficulty, MonsterState } from '../types/game';
 import { GAME_CONFIG } from '../data/config';
 import { generateDungeon, generateMonsters, generateChests, getPlayerStartPosition, updateFOV, isWalkable } from './utils/dungeon';
 import { getRandomRunes, createSkill, ALL_RUNES, SKILLS, getRuneById } from '../data/runes';
+import { createMonster } from '../data/monsters';
 import { calculateTalentEffects } from '../data/talents';
 import { getClassById, getClassStartingRunes } from '../data/classes';
 import { generateId, distance, normalize } from './utils/math';
@@ -79,6 +80,7 @@ export class GameEngine {
       chests: [],
       pet: null,
       projectiles: [],
+      monsterProjectiles: [],
       particles: [],
       damageNumbers: [],
       runeInventory: initialRunes,
@@ -156,6 +158,7 @@ export class GameEngine {
     this.updatePlayer(deltaTime);
     this.updatePet(deltaTime);
     this.updateMonsters(deltaTime);
+    this.updateMonsterProjectiles(deltaTime);
     this.updateProjectiles(deltaTime);
     this.updateParticles(deltaTime);
     this.updateDamageNumbers(deltaTime);
@@ -242,69 +245,452 @@ export class GameEngine {
   private updateMonsters(deltaTime: number) {
     const dt = deltaTime / 1000;
     const player = this.state.player;
-    
+
     for (const monster of this.state.monsters) {
       if (monster.hp <= 0) continue;
-      
+
       this.updateStatusEffects(monster, deltaTime);
-      
+
       let speedMultiplier = 1;
       const frozen = monster.statusEffects.find(s => s.type === 'frozen');
       const slowed = monster.statusEffects.find(s => s.type === 'slow');
       if (frozen) speedMultiplier = 0;
       else if (slowed) speedMultiplier = 0.5;
-      
+
       const dist = distance(monster.position, player.position);
-      const detectRange = 150;
-      
-      if (monster.aiType === 'aggressive' && dist < detectRange) {
-        const dir = normalize({
-          x: player.position.x - monster.position.x,
-          y: player.position.y - monster.position.y,
-        });
-        
-        const newX = monster.position.x + dir.x * monster.speed * speedMultiplier * dt;
-        const newY = monster.position.y + dir.y * monster.speed * speedMultiplier * dt;
-        
-        if (this.state.dungeon && isWalkable(this.state.dungeon, newX, monster.position.y)) {
-          monster.position.x = newX;
-        }
-        if (this.state.dungeon && isWalkable(this.state.dungeon, monster.position.x, newY)) {
-          monster.position.y = newY;
-        }
-        
-        if (dir.x < -0.1) monster.direction = -1;
-        else if (dir.x > 0.1) monster.direction = 1;
-      } else if (monster.aiType === 'patrol') {
-        if (Math.random() < 0.01) {
-          monster.direction = Math.random() < 0.5 ? -1 : 1;
-        }
-        
-        const newX = monster.position.x + monster.direction * monster.speed * speedMultiplier * dt * 0.3;
-        if (this.state.dungeon && isWalkable(this.state.dungeon, newX, monster.position.y)) {
-          monster.position.x = newX;
-        } else {
-          monster.direction *= -1;
+
+      for (const skill of monster.skills) {
+        if (skill.currentCooldown > 0) {
+          skill.currentCooldown -= deltaTime;
+          if (skill.currentCooldown < 0) skill.currentCooldown = 0;
         }
       }
-      
+
+      monster.stateTimer -= deltaTime;
+
+      switch (monster.aiType) {
+        case 'passive':
+          this.updatePassiveAI(monster, dt, speedMultiplier, dist);
+          break;
+        case 'aggressive':
+          this.updateAggressiveAI(monster, dt, speedMultiplier, dist);
+          break;
+        case 'patrol':
+          this.updatePatrolAI(monster, dt, speedMultiplier, dist);
+          break;
+        case 'ranged':
+          this.updateRangedAI(monster, dt, speedMultiplier, dist);
+          break;
+        case 'caster':
+          this.updateCasterAI(monster, dt, speedMultiplier, dist);
+          break;
+        case 'summoner':
+          this.updateSummonerAI(monster, dt, speedMultiplier, dist);
+          break;
+        case 'healer':
+          this.updateHealerAI(monster, dt, speedMultiplier, dist);
+          break;
+        case 'boss':
+          this.updateBossAI(monster, dt, speedMultiplier, dist);
+          break;
+      }
+
       monster.animTimer += deltaTime;
       if (monster.animTimer > 300) {
         monster.animFrame = (monster.animFrame + 1) % 2;
         monster.animTimer = 0;
       }
-      
-      if (dist < 30 && player.invincible <= 0 && monster.currentAttackCooldown <= 0) {
+
+      if (monster.attackRange <= 40 && dist < 30 && player.invincible <= 0 && monster.currentAttackCooldown <= 0) {
         this.damagePlayer(monster.damage);
         monster.currentAttackCooldown = monster.attackCooldown;
       }
-      
+
       if (monster.currentAttackCooldown > 0) {
         monster.currentAttackCooldown -= deltaTime;
       }
     }
-    
+
     this.state.monsters = this.state.monsters.filter(m => m.hp > 0);
+  }
+
+  private updatePassiveAI(monster: Monster, dt: number, speedMultiplier: number, distToPlayer: number) {
+    if (distToPlayer < monster.detectRange && monster.state === 'idle') {
+      monster.state = 'chase';
+    }
+    if (monster.state === 'chase') {
+      if (distToPlayer > monster.detectRange * 1.5) {
+        monster.state = 'idle';
+        return;
+      }
+      this.moveMonsterTowardPlayer(monster, dt, speedMultiplier);
+    }
+  }
+
+  private updateAggressiveAI(monster: Monster, dt: number, speedMultiplier: number, distToPlayer: number) {
+    if (distToPlayer < monster.detectRange) {
+      monster.state = 'chase';
+      this.moveMonsterTowardPlayer(monster, dt, speedMultiplier);
+    } else {
+      monster.state = 'idle';
+    }
+  }
+
+  private updatePatrolAI(monster: Monster, dt: number, speedMultiplier: number, distToPlayer: number) {
+    if (distToPlayer < monster.detectRange) {
+      monster.state = 'chase';
+      this.moveMonsterTowardPlayer(monster, dt, speedMultiplier);
+      return;
+    }
+    monster.state = 'idle';
+    if (Math.random() < 0.01) {
+      monster.direction = Math.random() < 0.5 ? -1 : 1;
+    }
+    const newX = monster.position.x + monster.direction * monster.speed * speedMultiplier * dt * 0.3;
+    if (this.state.dungeon && isWalkable(this.state.dungeon, newX, monster.position.y)) {
+      monster.position.x = newX;
+    } else {
+      monster.direction *= -1;
+    }
+  }
+
+  private updateRangedAI(monster: Monster, dt: number, speedMultiplier: number, distToPlayer: number) {
+    const hpPercent = monster.hp / monster.maxHp;
+
+    if (hpPercent < monster.fleeThreshold && distToPlayer < 80) {
+      monster.state = 'flee';
+      this.moveMonsterAwayFromPlayer(monster, dt, speedMultiplier);
+      return;
+    }
+
+    if (distToPlayer < monster.detectRange) {
+      if (distToPlayer > monster.attackRange) {
+        monster.state = 'chase';
+        this.moveMonsterTowardPlayer(monster, dt, speedMultiplier);
+      } else {
+        monster.state = 'attack';
+        this.tryUseMonsterSkill(monster, 'projectile');
+      }
+    } else {
+      monster.state = 'idle';
+    }
+  }
+
+  private updateCasterAI(monster: Monster, dt: number, speedMultiplier: number, distToPlayer: number) {
+    const hpPercent = monster.hp / monster.maxHp;
+
+    if (hpPercent < monster.fleeThreshold && distToPlayer < 80) {
+      monster.state = 'flee';
+      this.moveMonsterAwayFromPlayer(monster, dt, speedMultiplier);
+      return;
+    }
+
+    if (distToPlayer < monster.detectRange) {
+      if (distToPlayer > monster.attackRange) {
+        monster.state = 'chase';
+        this.moveMonsterTowardPlayer(monster, dt, speedMultiplier);
+      } else {
+        monster.state = 'cast';
+        this.tryUseMonsterSkill(monster, 'projectile');
+        this.tryUseMonsterSkill(monster, 'aoe');
+      }
+    } else {
+      monster.state = 'idle';
+    }
+  }
+
+  private updateSummonerAI(monster: Monster, dt: number, speedMultiplier: number, distToPlayer: number) {
+    const hpPercent = monster.hp / monster.maxHp;
+
+    if (hpPercent < monster.fleeThreshold && distToPlayer < 80) {
+      monster.state = 'flee';
+      this.moveMonsterAwayFromPlayer(monster, dt, speedMultiplier);
+      return;
+    }
+
+    if (distToPlayer < monster.detectRange) {
+      const currentSummons = this.state.monsters.filter(m => m.hp > 0 && !m.isBoss).length;
+      if (currentSummons < monster.maxSummons) {
+        this.tryUseMonsterSkill(monster, 'summon');
+      }
+      if (distToPlayer > monster.attackRange) {
+        monster.state = 'chase';
+        this.moveMonsterTowardPlayer(monster, dt, speedMultiplier * 0.5);
+      } else {
+        monster.state = 'cast';
+        this.tryUseMonsterSkill(monster, 'projectile');
+      }
+    } else {
+      monster.state = 'idle';
+    }
+  }
+
+  private updateHealerAI(monster: Monster, dt: number, speedMultiplier: number, distToPlayer: number) {
+    const hpPercent = monster.hp / monster.maxHp;
+
+    if (hpPercent < monster.fleeThreshold && distToPlayer < 80) {
+      monster.state = 'flee';
+      this.moveMonsterAwayFromPlayer(monster, dt, speedMultiplier);
+      return;
+    }
+
+    if (distToPlayer < monster.detectRange) {
+      const injuredAlly = this.findInjuredAlly(monster);
+      if (injuredAlly && (distToPlayer < (monster.skills.find(s => s.type === 'heal')?.range || 120))) {
+        monster.state = 'heal';
+        this.tryUseMonsterSkill(monster, 'heal');
+      }
+
+      if (distToPlayer > monster.attackRange) {
+        monster.state = 'chase';
+        this.moveMonsterTowardPlayer(monster, dt, speedMultiplier * 0.6);
+      } else {
+        monster.state = 'attack';
+        this.tryUseMonsterSkill(monster, 'projectile');
+      }
+    } else {
+      monster.state = 'idle';
+    }
+  }
+
+  private updateBossAI(monster: Monster, dt: number, speedMultiplier: number, distToPlayer: number) {
+    if (distToPlayer < monster.detectRange) {
+      const hpPercent = monster.hp / monster.maxHp;
+      const isEnraged = hpPercent < 0.3;
+
+      if (distToPlayer > monster.attackRange) {
+        monster.state = 'chase';
+        const speed = isEnraged ? monster.speed * 1.5 : monster.speed;
+        this.moveMonsterTowardPlayer(monster, dt, speedMultiplier * (speed / monster.speed));
+      } else {
+        monster.state = 'attack';
+        if (distToPlayer < 40 && this.state.player.invincible <= 0 && monster.currentAttackCooldown <= 0) {
+          this.damagePlayer(monster.damage * (isEnraged ? 1.5 : 1));
+          monster.currentAttackCooldown = monster.attackCooldown * (isEnraged ? 0.6 : 1);
+        }
+      }
+
+      for (const skill of monster.skills) {
+        if (skill.currentCooldown <= 0) {
+          this.executeMonsterSkill(monster, skill);
+          skill.currentCooldown = skill.cooldown * (isEnraged ? 0.6 : 1);
+        }
+      }
+    } else {
+      monster.state = 'idle';
+    }
+  }
+
+  private moveMonsterTowardPlayer(monster: Monster, dt: number, speedMultiplier: number) {
+    const player = this.state.player;
+    const dir = normalize({
+      x: player.position.x - monster.position.x,
+      y: player.position.y - monster.position.y,
+    });
+
+    const newX = monster.position.x + dir.x * monster.speed * speedMultiplier * dt;
+    const newY = monster.position.y + dir.y * monster.speed * speedMultiplier * dt;
+
+    if (this.state.dungeon && isWalkable(this.state.dungeon, newX, monster.position.y)) {
+      monster.position.x = newX;
+    }
+    if (this.state.dungeon && isWalkable(this.state.dungeon, monster.position.x, newY)) {
+      monster.position.y = newY;
+    }
+
+    if (dir.x < -0.1) monster.direction = -1;
+    else if (dir.x > 0.1) monster.direction = 1;
+  }
+
+  private moveMonsterAwayFromPlayer(monster: Monster, dt: number, speedMultiplier: number) {
+    const player = this.state.player;
+    const dir = normalize({
+      x: monster.position.x - player.position.x,
+      y: monster.position.y - player.position.y,
+    });
+
+    const newX = monster.position.x + dir.x * monster.speed * speedMultiplier * dt;
+    const newY = monster.position.y + dir.y * monster.speed * speedMultiplier * dt;
+
+    if (this.state.dungeon && isWalkable(this.state.dungeon, newX, monster.position.y)) {
+      monster.position.x = newX;
+    }
+    if (this.state.dungeon && isWalkable(this.state.dungeon, monster.position.x, newY)) {
+      monster.position.y = newY;
+    }
+
+    if (dir.x < -0.1) monster.direction = -1;
+    else if (dir.x > 0.1) monster.direction = 1;
+  }
+
+  private tryUseMonsterSkill(monster: Monster, skillType: MonsterSkill['type']) {
+    const skill = monster.skills.find(s => s.type === skillType && s.currentCooldown <= 0);
+    if (!skill) return;
+    this.executeMonsterSkill(monster, skill);
+    skill.currentCooldown = skill.cooldown;
+  }
+
+  private executeMonsterSkill(monster: Monster, skill: MonsterSkill) {
+    const player = this.state.player;
+    const dist = distance(monster.position, player.position);
+
+    switch (skill.type) {
+      case 'projectile': {
+        if (dist > (skill.range || 150)) return;
+        const dir = normalize({
+          x: player.position.x - monster.position.x,
+          y: player.position.y - monster.position.y,
+        });
+        const speed = skill.projectileSpeed || 200;
+        const proj: MonsterProjectile = {
+          id: generateId(),
+          position: { ...monster.position },
+          velocity: { x: dir.x * speed, y: dir.y * speed },
+          damage: skill.damage,
+          element: skill.element,
+          range: skill.range || 150,
+          traveled: 0,
+          size: monster.isBoss ? 8 : 5,
+          color: this.getMonsterSkillColor(skill),
+          sourceId: monster.id,
+        };
+        this.state.monsterProjectiles.push(proj);
+        for (let i = 0; i < 6; i++) {
+          this.addParticle(
+            monster.position.x + (Math.random() - 0.5) * 10,
+            monster.position.y + (Math.random() - 0.5) * 10,
+            proj.color,
+            'magic'
+          );
+        }
+        break;
+      }
+
+      case 'aoe': {
+        if (dist > (skill.aoeRadius || 60) + 50) return;
+        const radius = skill.aoeRadius || 60;
+        for (let i = 0; i < 20; i++) {
+          const angle = (Math.PI * 2 * i) / 20;
+          this.addParticle(
+            monster.position.x + Math.cos(angle) * radius * 0.5,
+            monster.position.y + Math.sin(angle) * radius * 0.5,
+            this.getMonsterSkillColor(skill),
+            'explosion'
+          );
+        }
+        if (dist < radius && this.state.player.invincible <= 0) {
+          this.damagePlayer(skill.damage);
+        }
+        break;
+      }
+
+      case 'summon': {
+        const summonType = skill.summonType || 'skeleton';
+        const count = skill.summonCount || 2;
+        const currentSummons = this.state.monsters.filter(m => m.hp > 0 && !m.isBoss).length;
+        const maxAllowed = monster.maxSummons || 4;
+        if (currentSummons >= maxAllowed) return;
+
+        const actualCount = Math.min(count, maxAllowed - currentSummons);
+        for (let i = 0; i < actualCount; i++) {
+          const angle = (Math.PI * 2 * i) / actualCount;
+          const spawnX = monster.position.x + Math.cos(angle) * 40;
+          const spawnY = monster.position.y + Math.sin(angle) * 40;
+          if (this.state.dungeon && isWalkable(this.state.dungeon, spawnX, spawnY)) {
+            const summon = createMonster(summonType, { x: spawnX, y: spawnY }, 0.6);
+            this.state.monsters.push(summon);
+            monster.summonCount++;
+            for (let j = 0; j < 8; j++) {
+              this.addParticle(spawnX, spawnY, '#6c5ce7', 'magic');
+            }
+          }
+        }
+        break;
+      }
+
+      case 'heal': {
+        const healPercent = skill.healPercent || 0.3;
+        const target = this.findInjuredAlly(monster) || (monster.hp < monster.maxHp ? monster : null);
+        if (!target) return;
+        const healAmount = Math.floor(target.maxHp * healPercent);
+        const oldHp = target.hp;
+        target.hp = Math.min(target.maxHp, target.hp + healAmount);
+        const actualHeal = target.hp - oldHp;
+        if (actualHeal > 0) {
+          this.addDamageNumber(target.position, actualHeal, '#7bed9f', false);
+          for (let i = 0; i < 12; i++) {
+            this.addParticle(
+              target.position.x + (Math.random() - 0.5) * 20,
+              target.position.y + (Math.random() - 0.5) * 20,
+              '#7bed9f',
+              'magic'
+            );
+          }
+        }
+        break;
+      }
+
+      case 'buff': {
+        break;
+      }
+    }
+  }
+
+  private findInjuredAlly(monster: Monster): Monster | null {
+    let mostInjured: Monster | null = null;
+    let lowestPercent = 1;
+    for (const ally of this.state.monsters) {
+      if (ally.hp <= 0 || ally.id === monster.id) continue;
+      const percent = ally.hp / ally.maxHp;
+      if (percent < 0.8 && percent < lowestPercent) {
+        lowestPercent = percent;
+        mostInjured = ally;
+      }
+    }
+    return mostInjured;
+  }
+
+  private getMonsterSkillColor(skill: MonsterSkill): string {
+    if (skill.element === 'fire') return '#ff6b35';
+    if (skill.element === 'ice') return '#4ecdc4';
+    if (skill.element === 'thunder') return '#ffe66d';
+    return '#a29bfe';
+  }
+
+  private updateMonsterProjectiles(deltaTime: number) {
+    const dt = deltaTime / 1000;
+
+    for (let i = this.state.monsterProjectiles.length - 1; i >= 0; i--) {
+      const proj = this.state.monsterProjectiles[i];
+
+      proj.position.x += proj.velocity.x * dt;
+      proj.position.y += proj.velocity.y * dt;
+      proj.traveled += Math.abs(proj.velocity.x * dt) + Math.abs(proj.velocity.y * dt);
+
+      if (Math.random() < 0.3) {
+        this.addParticle(
+          proj.position.x,
+          proj.position.y,
+          proj.color,
+          'spark'
+        );
+      }
+
+      const distToPlayer = distance(proj.position, this.state.player.position);
+      if (distToPlayer < 20 + proj.size && this.state.player.invincible <= 0) {
+        this.damagePlayer(proj.damage);
+        this.state.monsterProjectiles.splice(i, 1);
+        continue;
+      }
+
+      if (
+        proj.traveled > proj.range ||
+        !this.state.dungeon ||
+        !isWalkable(this.state.dungeon, proj.position.x, proj.position.y)
+      ) {
+        this.state.monsterProjectiles.splice(i, 1);
+      }
+    }
   }
   
   private updatePet(deltaTime: number) {
@@ -1157,6 +1543,7 @@ export class GameEngine {
     this.state.chests = newChests;
     this.state.player.position = { ...startPos };
     this.state.projectiles = [];
+    this.state.monsterProjectiles = [];
     this.state.particles = [];
     
     if (this.state.pet) {
@@ -1232,6 +1619,7 @@ export class GameEngine {
     this.state.killCount = 0;
     this.state.gold = 0;
     this.state.projectiles = [];
+    this.state.monsterProjectiles = [];
     this.state.particles = [];
     this.state.damageNumbers = [];
     this.state.runeInventory = initialRunes;
@@ -1547,6 +1935,7 @@ export class GameEngine {
     this.state.killCount = 0;
     this.state.gold = 0;
     this.state.projectiles = [];
+    this.state.monsterProjectiles = [];
     this.state.particles = [];
     this.state.damageNumbers = [];
     this.state.runeInventory = challengeRunes;
@@ -2491,13 +2880,33 @@ export class GameEngine {
         tileY >= 0 && tileY < this.state.dungeon.height &&
         this.state.dungeon.tiles[tileY][tileX].visible
       ) {
-        drawMonster(ctx, monster.type, screenX, screenY, monster.color, monster.animFrame, 2);
+        drawMonster(ctx, monster.type, screenX, screenY, monster.color, monster.animFrame, 2, monster.isBoss, monster.bossType);
         
+        const hpBarWidth = monster.isBoss ? 36 : 24;
         const hpPercent = monster.hp / monster.maxHp;
         ctx.fillStyle = '#2d3436';
-        ctx.fillRect(screenX - 12, screenY - 20, 24, 4);
+        ctx.fillRect(screenX - hpBarWidth / 2, screenY - (monster.isBoss ? 28 : 20), hpBarWidth, 4);
         ctx.fillStyle = hpPercent > 0.5 ? '#7bed9f' : hpPercent > 0.25 ? '#ffeaa7' : '#ff7675';
-        ctx.fillRect(screenX - 12, screenY - 20, 24 * hpPercent, 4);
+        ctx.fillRect(screenX - hpBarWidth / 2, screenY - (monster.isBoss ? 28 : 20), hpBarWidth * hpPercent, 4);
+        
+        if (monster.isBoss) {
+          ctx.fillStyle = '#ffd700';
+          ctx.font = 'bold 9px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(monster.name, screenX, screenY - 34);
+        }
+
+        const stateColors: Record<string, string> = {
+          idle: '#636e72',
+          chase: '#ff6b35',
+          attack: '#d63031',
+          flee: '#74b9ff',
+          cast: '#6c5ce7',
+          heal: '#7bed9f',
+          summon: '#e056a0',
+        };
+        ctx.fillStyle = stateColors[monster.state] || '#636e72';
+        ctx.fillRect(screenX - 10, screenY - (monster.isBoss ? 24 : 14) - 6, 4, 4);
         
         if (monster.statusEffects.length > 0) {
           for (let i = 0; i < monster.statusEffects.length; i++) {
@@ -2509,7 +2918,7 @@ export class GameEngine {
             else if (effect.type === 'paralyze') effectColor = '#ffe66d';
             
             ctx.fillStyle = effectColor;
-            ctx.fillRect(screenX - 10 + i * 6, screenY - 26, 4, 4);
+            ctx.fillRect(screenX - 10 + i * 6, screenY - (monster.isBoss ? 24 : 14) - 12, 4, 4);
           }
         }
       }
@@ -2570,6 +2979,22 @@ export class GameEngine {
       ctx.beginPath();
       ctx.arc(screenX, screenY, proj.size + 4, 0, Math.PI * 2);
       ctx.fill();
+    }
+
+    for (const proj of this.state.monsterProjectiles) {
+      const screenX = proj.position.x - cam.x;
+      const screenY = proj.position.y - cam.y;
+
+      ctx.fillStyle = proj.color;
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, proj.size, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, proj.size + 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
     }
     
     for (const p of this.state.particles) {
