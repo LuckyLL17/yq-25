@@ -82,6 +82,8 @@ interface GameStore {
   showShopPanel: boolean;
   currentShop: Shop | null;
   pet: Pet | null;
+  showMiniMap: boolean;
+  miniMapZoomed: boolean;
   
   setScene: (scene: GameScene) => void;
   setPlayer: (player: Player) => void;
@@ -123,6 +125,10 @@ interface GameStore {
   setShowShopPanel: (show: boolean) => void;
   setCurrentShop: (shop: Shop | null) => void;
   buyShopItem: (itemId: string) => boolean;
+  setShowMiniMap: (show: boolean) => void;
+  toggleMiniMap: () => void;
+  setMiniMapZoomed: (zoomed: boolean) => void;
+  toggleMiniMapZoom: () => void;
 }
 
 export const useGameStore = create<GameStore>((set, get) => {
@@ -173,8 +179,10 @@ export const useGameStore = create<GameStore>((set, get) => {
     potionBuffTimers: {},
     showPotionPanel: false,
     showShopPanel: false,
-    currentShop: null,
-    pet: null,
+  currentShop: null,
+  pet: null,
+  showMiniMap: true,
+  miniMapZoomed: false,
   
   setScene: (scene) => set({ scene }),
   setPlayer: (player) => set({ player }),
@@ -199,6 +207,10 @@ export const useGameStore = create<GameStore>((set, get) => {
   setMaterialInventory: (materialInventory) => set({ materialInventory }),
   setShowShopPanel: (showShopPanel) => set({ showShopPanel }),
   setCurrentShop: (currentShop) => set({ currentShop }),
+  setShowMiniMap: (showMiniMap) => set({ showMiniMap }),
+  toggleMiniMap: () => set((state) => ({ showMiniMap: !state.showMiniMap })),
+  setMiniMapZoomed: (miniMapZoomed) => set({ miniMapZoomed }),
+  toggleMiniMapZoom: () => set((state) => ({ miniMapZoomed: !state.miniMapZoomed })),
   setDraggedRune: (draggedRune) => set({ draggedRune }),
   
   addToast: (toast) => {

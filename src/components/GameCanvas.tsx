@@ -5,12 +5,13 @@ import GameHUD from './GameHUD';
 import RunePanel from './RunePanel';
 import DeathScreen from './DeathScreen';
 import ShopPanel from './ShopPanel';
+import MiniMap from './MiniMap';
 import { GAME_CONFIG } from '../data/config';
 
 const GameCanvas = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { scene, updateFromEngine, setShowShopPanel, setCurrentShop } = useGameStore();
+  const { scene, updateFromEngine, setShowShopPanel, setCurrentShop, toggleMiniMap, toggleMiniMapZoom } = useGameStore();
   const engine = getGameEngine();
   
   useEffect(() => {
@@ -28,6 +29,13 @@ const GameCanvas = () => {
       
       if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         e.preventDefault();
+      }
+      
+      if (e.key.toLowerCase() === 'm') {
+        toggleMiniMap();
+      }
+      if (e.key.toLowerCase() === 'n') {
+        toggleMiniMapZoom();
       }
     };
     
@@ -48,7 +56,7 @@ const GameCanvas = () => {
       window.removeEventListener('keyup', handleKeyUp);
       engine.stop();
     };
-  }, [engine, setShowShopPanel, setCurrentShop]);
+  }, [engine, setShowShopPanel, setCurrentShop, toggleMiniMap, toggleMiniMapZoom]);
   
   useEffect(() => {
     if (scene === 'playing' || scene === 'gameover' || scene === 'victory') {
@@ -78,12 +86,13 @@ const GameCanvas = () => {
       <RunePanel />
       <DeathScreen />
       <ShopPanel />
+      {scene === 'playing' && <MiniMap />}
       
       {scene === 'playing' && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
           <div className="bg-gray-900/80 px-4 py-2 rounded-lg border-2 border-gray-700">
             <p className="text-gray-400 text-xs text-center">
-              空格键互动 · 数字键释放技能
+              空格键互动 · 数字键释放技能 · M 键小地图 · N 键放大
             </p>
           </div>
         </div>
