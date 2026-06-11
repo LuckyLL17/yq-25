@@ -473,6 +473,7 @@ export interface GameState {
   currentLevel: number;
   killCount: number;
   gold: number;
+  runeDust: number;
   selectedRuneSlot: number | null;
   combineSlot1: Rune | null;
   combineSlot2: Rune | null;

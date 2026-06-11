@@ -1,4 +1,69 @@
-import type { Rune, Skill, RuneElement, RuneEffect } from '../types/game';
+import type { Rune, Skill, RuneElement, RuneEffect, RuneRarity } from '../types/game';
+
+export const RARITY_CONFIG: Record<RuneRarity, {
+  name: string;
+  color: string;
+  borderColor: string;
+  bgGradient: string;
+  glowIntensity: number;
+  animation: string;
+  tier: number;
+  dustValue: number;
+  synthesizeCount: number;
+}> = {
+  common: {
+    name: '普通',
+    color: '#9ca3af',
+    borderColor: '#6b7280',
+    bgGradient: 'from-gray-500 to-gray-600',
+    glowIntensity: 5,
+    animation: '',
+    tier: 1,
+    dustValue: 5,
+    synthesizeCount: 3,
+  },
+  rare: {
+    name: '稀有',
+    color: '#3b82f6',
+    borderColor: '#2563eb',
+    bgGradient: 'from-blue-500 to-blue-600',
+    glowIntensity: 12,
+    animation: 'animate-pulse-slow',
+    tier: 2,
+    dustValue: 15,
+    synthesizeCount: 3,
+  },
+  epic: {
+    name: '史诗',
+    color: '#a855f7',
+    borderColor: '#9333ea',
+    bgGradient: 'from-purple-500 to-purple-600',
+    glowIntensity: 18,
+    animation: 'animate-pulse-slow animate-shimmer',
+    tier: 3,
+    dustValue: 50,
+    synthesizeCount: 3,
+  },
+  legendary: {
+    name: '传说',
+    color: '#f59e0b',
+    borderColor: '#d97706',
+    bgGradient: 'from-yellow-500 to-orange-500',
+    glowIntensity: 25,
+    animation: 'animate-pulse-slow animate-shimmer animate-rainbow',
+    tier: 4,
+    dustValue: 200,
+    synthesizeCount: 0,
+  },
+};
+
+export const RARITY_ORDER: RuneRarity[] = ['common', 'rare', 'epic', 'legendary'];
+
+export const getNextRarity = (rarity: RuneRarity): RuneRarity | null => {
+  const index = RARITY_ORDER.indexOf(rarity);
+  if (index === -1 || index >= RARITY_ORDER.length - 1) return null;
+  return RARITY_ORDER[index + 1];
+};
 
 export const ELEMENT_RUNES: Rune[] = [
   {
@@ -27,6 +92,33 @@ export const ELEMENT_RUNES: Rune[] = [
     color: '#ffe66d',
     rarity: 'common',
     description: '蕴含雷电之力的符文，高伤害有几率麻痹',
+  },
+  {
+    id: 'rune_fire_rare',
+    name: '炽焰符文',
+    type: 'element',
+    element: 'fire',
+    color: '#ff8c00',
+    rarity: 'rare',
+    description: '炽热的火焰符文，燃烧更猛烈，灼烧伤害提升',
+  },
+  {
+    id: 'rune_ice_rare',
+    name: '极霜符文',
+    type: 'element',
+    element: 'ice',
+    color: '#1e90ff',
+    rarity: 'rare',
+    description: '极寒的冰霜符文，冻结几率提升，减速效果增强',
+  },
+  {
+    id: 'rune_thunder_rare',
+    name: '闪雷符文',
+    type: 'element',
+    element: 'thunder',
+    color: '#ffd700',
+    rarity: 'rare',
+    description: '迅捷的雷电符文，攻击速度更快，麻痹几率提升',
   },
   {
     id: 'rune_fire_exclusive',
@@ -102,6 +194,42 @@ export const EFFECT_RUNES: Rune[] = [
     color: '#74b9ff',
     rarity: 'common',
     description: '技能可穿透多个敌人',
+  },
+  {
+    id: 'rune_spread_rare',
+    name: '扩散增幅符文',
+    type: 'effect',
+    effect: 'spread',
+    color: '#00cec9',
+    rarity: 'rare',
+    description: '更大范围的扩散，同时影响更多目标',
+  },
+  {
+    id: 'rune_time_rare',
+    name: '时间延滞符文',
+    type: 'effect',
+    effect: 'time',
+    color: '#6c5ce7',
+    rarity: 'rare',
+    description: '效果持续时间大幅延长，冷却进一步缩短',
+  },
+  {
+    id: 'rune_power_rare',
+    name: '力量激化符文',
+    type: 'effect',
+    effect: 'power',
+    color: '#e84393',
+    rarity: 'rare',
+    description: '技能伤害进一步提升，有几率造成暴击',
+  },
+  {
+    id: 'rune_pierce_rare',
+    name: '贯穿强化符文',
+    type: 'effect',
+    effect: 'pierce',
+    color: '#0984e3',
+    rarity: 'rare',
+    description: '穿透更多敌人，穿透伤害衰减降低',
   },
   {
     id: 'rune_explosion',
@@ -626,4 +754,65 @@ export const getRandomRune = (difficulty?: string): Rune => {
 
 export const getRuneById = (id: string): Rune | undefined => {
   return ALL_RUNES.find(r => r.id === id);
+};
+
+export const getRunesByRarityAndType = (
+  rarity: RuneRarity,
+  type: 'element' | 'effect',
+  elementOrEffect?: string
+): Rune[] => {
+  return ALL_RUNES.filter(r => {
+    if (r.rarity !== rarity || r.type !== type) return false;
+    if (type === 'element' && elementOrEffect && r.element !== elementOrEffect) return false;
+    if (type === 'effect' && elementOrEffect && r.effect !== elementOrEffect) return false;
+    return true;
+  });
+};
+
+export const canSynthesize = (runes: Rune[]): boolean => {
+  if (runes.length === 0) return false;
+  const firstRune = runes[0];
+  const config = RARITY_CONFIG[firstRune.rarity];
+  if (config.synthesizeCount === 0) return false;
+  if (runes.length !== config.synthesizeCount) return false;
+  return runes.every(r =>
+    r.rarity === firstRune.rarity &&
+    r.type === firstRune.type &&
+    (r.type === 'element' ? r.element === firstRune.element : r.effect === firstRune.effect)
+  );
+};
+
+export const synthesizeRunes = (runes: Rune[]): Rune | null => {
+  if (!canSynthesize(runes)) return null;
+  const firstRune = runes[0];
+  const nextRarity = getNextRarity(firstRune.rarity);
+  if (!nextRarity) return null;
+  const candidates = getRunesByRarityAndType(
+    nextRarity,
+    firstRune.type,
+    firstRune.type === 'element' ? firstRune.element : firstRune.effect
+  );
+  if (candidates.length === 0) {
+    const allCandidates = getRunesByRarityAndType(nextRarity, firstRune.type);
+    if (allCandidates.length === 0) return null;
+    return allCandidates[Math.floor(Math.random() * allCandidates.length)];
+  }
+  return candidates[Math.floor(Math.random() * candidates.length)];
+};
+
+export const decomposeRune = (rune: Rune): number => {
+  return RARITY_CONFIG[rune.rarity].dustValue;
+};
+
+export const getSkillWithRarityBonus = (skill: Skill, rarity1: RuneRarity, rarity2: RuneRarity): Skill => {
+  const tier1 = RARITY_CONFIG[rarity1].tier;
+  const tier2 = RARITY_CONFIG[rarity2].tier;
+  const avgTier = (tier1 + tier2) / 2;
+  const multiplier = 1 + (avgTier - 1.5) * 0.25;
+  return {
+    ...skill,
+    damage: Math.floor(skill.damage * multiplier),
+    range: Math.floor(skill.range * (1 + (avgTier - 1.5) * 0.1)),
+    cooldown: Math.floor(skill.cooldown / (1 + (avgTier - 1.5) * 0.1)),
+  };
 };

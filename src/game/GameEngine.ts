@@ -89,6 +89,7 @@ export class GameEngine {
       currentLevel: 1,
       killCount: 0,
       gold: 0,
+      runeDust: 0,
       selectedRuneSlot: null,
       combineSlot1: null,
       combineSlot2: null,
@@ -1715,6 +1716,7 @@ export class GameEngine {
     this.state.currentLevel = 1;
     this.state.killCount = 0;
     this.state.gold = 0;
+    this.state.runeDust = 0;
     this.state.projectiles = [];
     this.state.monsterProjectiles = [];
     this.state.particles = [];
@@ -2031,6 +2033,7 @@ export class GameEngine {
     this.state.currentLevel = challenge.level;
     this.state.killCount = 0;
     this.state.gold = 0;
+    this.state.runeDust = 0;
     this.state.projectiles = [];
     this.state.monsterProjectiles = [];
     this.state.particles = [];

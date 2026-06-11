@@ -4,6 +4,8 @@ import { loadSaveData, unlockTalent as saveUnlockTalent, saveEquipment, savePoti
 import { getTalentCost, canUnlockTalent } from '../data/talents';
 import { upgradeEquipment as upgradeEquip, getUpgradeCost, getEquipmentTemplate, generateShopEquipment, getBuyPrice, getSellPrice } from '../data/equipment';
 import { createPotion, getPotionTemplate } from '../data/potions';
+import { synthesizeRunes, decomposeRune, canSynthesize, RARITY_CONFIG } from '../data/runes';
+import type { Rune } from '../types/game';
 
 const loadEquipmentFromSaveData = (saveData: SaveData): { inventory: Equipment[]; equipped: Record<EquipmentSlotType, Equipment | null> } => {
   const inventory = saveData.equipmentInventory || [];
@@ -48,6 +50,7 @@ interface GameStore {
   currentLevel: number;
   killCount: number;
   gold: number;
+  runeDust: number;
   saveData: SaveData;
   combineSlot1: Rune | null;
   combineSlot2: Rune | null;
@@ -100,6 +103,9 @@ interface GameStore {
   setCurrentLevel: (level: number) => void;
   setKillCount: (count: number) => void;
   setGold: (gold: number) => void;
+  setRuneDust: (dust: number) => void;
+  synthesizeRunesAction: (runeIds: string[]) => boolean;
+  decomposeRuneAction: (runeId: string, runeIndex: number) => boolean;
   setCombineSlot1: (rune: Rune | null) => void;
   setCombineSlot2: (rune: Rune | null) => void;
   setShowRunePanel: (show: boolean) => void;
@@ -154,9 +160,10 @@ export const useGameStore = create<GameStore>((set, get) => {
     equippedRunes: [null, null, null, null],
     activeSkills: [],
     currentLevel: 1,
-    killCount: 0,
-    gold: 0,
-    saveData: initialSaveData,
+  killCount: 0,
+  gold: 0,
+  runeDust: 0,
+  saveData: initialSaveData,
     combineSlot1: null,
     combineSlot2: null,
     showRunePanel: false,
@@ -208,6 +215,107 @@ export const useGameStore = create<GameStore>((set, get) => {
   setCurrentLevel: (currentLevel) => set({ currentLevel }),
   setKillCount: (killCount) => set({ killCount }),
   setGold: (gold) => set({ gold }),
+  setRuneDust: (runeDust) => set({ runeDust }),
+  
+  synthesizeRunesAction: (runeIds: string[]): boolean => {
+    const state = get();
+    const { getGameEngine } = require('../game/GameEngine');
+    const engine = getGameEngine();
+    
+    const runesToSynth: Rune[] = [];
+    const inventoryCopy = [...state.runeInventory];
+    const indicesToRemove: number[] = [];
+    
+    for (const runeId of runeIds) {
+      const idx = inventoryCopy.findIndex(r => r.id === runeId);
+      if (idx !== -1) {
+        runesToSynth.push(inventoryCopy[idx]);
+        indicesToRemove.push(idx);
+      }
+    }
+    
+    if (runeIds.length !== indicesToRemove.length) return false;
+    if (!canSynthesize(runesToSynth)) return false;
+    
+    const equippedRuneIds = state.equippedRunes.filter(Boolean).map(r => r!.id);
+    const anyEquipped = runeIds.some(id => equippedRuneIds.includes(id));
+    if (anyEquipped) {
+      state.addToast({
+        type: 'info',
+        title: '无法合成',
+        description: '请先卸下装备中的符文',
+      });
+      return false;
+    }
+    
+    const newRune = synthesizeRunes(runesToSynth);
+    if (!newRune) return false;
+    
+    for (let i = indicesToRemove.length - 1; i >= 0; i--) {
+      inventoryCopy.splice(indicesToRemove[i], 1);
+    }
+    inventoryCopy.push(newRune);
+    
+    if (engine) {
+      engine.state.runeInventory = inventoryCopy;
+      engine.updateSkillsFromRunes();
+      if (engine.onStateChange) engine.onStateChange();
+    }
+    
+    set({ runeInventory: inventoryCopy });
+    
+    state.addToast({
+      type: 'success',
+      title: '合成成功！',
+      description: `获得 ${RARITY_CONFIG[newRune.rarity].name} ${newRune.name}`,
+      color: newRune.color,
+    });
+    
+    return true;
+  },
+  
+  decomposeRuneAction: (runeId: string, runeIndex: number): boolean => {
+    const state = get();
+    const { getGameEngine } = require('../game/GameEngine');
+    const engine = getGameEngine();
+    
+    const equippedRuneIds = state.equippedRunes.filter(Boolean).map(r => r!.id);
+    if (equippedRuneIds.includes(runeId)) {
+      state.addToast({
+        type: 'info',
+        title: '无法分解',
+        description: '请先卸下装备中的符文',
+      });
+      return false;
+    }
+    
+    const rune = state.runeInventory[runeIndex];
+    if (!rune || rune.id !== runeId) return false;
+    
+    const dustValue = decomposeRune(rune);
+    const inventoryCopy = [...state.runeInventory];
+    inventoryCopy.splice(runeIndex, 1);
+    const newDust = state.runeDust + dustValue;
+    
+    if (engine) {
+      engine.state.runeInventory = inventoryCopy;
+      engine.state.runeDust = newDust;
+      engine.updateSkillsFromRunes();
+      if (engine.onStateChange) engine.onStateChange();
+    }
+    
+    set({ runeInventory: inventoryCopy, runeDust: newDust });
+    
+    state.addToast({
+      type: 'success',
+      title: '分解成功！',
+      description: `获得 ${dustValue} 符文粉尘`,
+      color: '#fbbf24',
+    });
+    
+    return true;
+  },
+  
   setCombineSlot1: (combineSlot1) => set({ combineSlot1 }),
   setCombineSlot2: (combineSlot2) => set({ combineSlot2 }),
   setShowRunePanel: (showRunePanel) => set({ showRunePanel }),
@@ -285,6 +393,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       currentLevel: state.currentLevel,
       killCount: state.killCount,
       gold: state.gold,
+      runeDust: state.runeDust || 0,
       monsters: state.monsters,
       chests: state.chests,
       combineSlot1: state.combineSlot1,
