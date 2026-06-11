@@ -1,9 +1,11 @@
-import type { Shop, ShopItem, Rune, Equipment, Potion } from '../types/game';
-import { ALL_RUNES } from './runes';
-import { getRandomEquipment, RARITY_WEIGHTS } from './equipment';
-import { getRandomPotion, POTION_TEMPLATES } from './potions';
+import type { Shop, ShopItem, Rune, Potion } from '../types/game';
+import type { AdventureDifficulty } from '../types/game';
+import { getRunesForDifficulty } from './runes';
+import { getEquipmentTemplatesForDifficulty, createEquipment } from './equipment';
+import { getRandomPotion } from './potions';
 import { generateId } from '../game/utils/math';
 import { GAME_CONFIG } from './config';
+import { getDifficultyConfig } from './difficulty';
 
 export const SHOPKEEPER_NAMES = [
   '神秘商人·墨',
@@ -28,6 +30,7 @@ export const getRuneBuyPrice = (rune: Rune): number => {
     common: 30,
     rare: 80,
     epic: 200,
+    legendary: 500,
   };
   return basePrices[rune.rarity] || 50;
 };
@@ -41,7 +44,10 @@ export const getPotionBuyPrice = (potion: Potion): number => {
   return basePrices[potion.rarity] || 40;
 };
 
-export const generateShopItems = (level: number, count: number = 6): ShopItem[] => {
+export const generateShopItems = (level: number, count: number = 6, difficulty: AdventureDifficulty = 'adventurer'): ShopItem[] => {
+  const diffConfig = getDifficultyConfig(difficulty);
+  const availableRunes = getRunesForDifficulty(difficulty);
+  const availableEquipTemplates = getEquipmentTemplatesForDifficulty(difficulty);
   const items: ShopItem[] = [];
   const usedIds = new Set<string>();
 
@@ -51,10 +57,16 @@ export const generateShopItems = (level: number, count: number = 6): ShopItem[] 
     const type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
 
     if (type === 'rune') {
-      const availableRunes = ALL_RUNES.filter(r => !usedIds.has(r.id));
-      if (availableRunes.length === 0) continue;
+      const filteredRunes = availableRunes.filter(r => !usedIds.has(r.id));
+      if (filteredRunes.length === 0) continue;
 
-      const rune = availableRunes[Math.floor(Math.random() * availableRunes.length)];
+      let rune: Rune;
+      if (Math.random() < diffConfig.runeRarityBoost) {
+        const rareRunes = filteredRunes.filter(r => r.rarity === 'legendary' || r.rarity === 'epic');
+        rune = rareRunes.length > 0 ? rareRunes[Math.floor(Math.random() * rareRunes.length)] : filteredRunes[Math.floor(Math.random() * filteredRunes.length)];
+      } else {
+        rune = filteredRunes[Math.floor(Math.random() * filteredRunes.length)];
+      }
       usedIds.add(rune.id);
 
       items.push({
@@ -66,7 +78,16 @@ export const generateShopItems = (level: number, count: number = 6): ShopItem[] 
       });
     } else if (type === 'equipment') {
       const equipLevel = Math.max(1, Math.floor(level * (0.5 + Math.random() * 0.8)));
-      const equipment = getRandomEquipment(equipLevel);
+      
+      let template;
+      if (Math.random() < diffConfig.equipmentRarityBoost) {
+        const highRarity = availableEquipTemplates.filter(t => t.rarity === 'legendary' || t.rarity === 'epic');
+        template = highRarity.length > 0 ? highRarity[Math.floor(Math.random() * highRarity.length)] : availableEquipTemplates[Math.floor(Math.random() * availableEquipTemplates.length)];
+      } else {
+        template = availableEquipTemplates[Math.floor(Math.random() * availableEquipTemplates.length)];
+      }
+      
+      const equipment = createEquipment(template.id, equipLevel);
       if (!equipment) continue;
       if (usedIds.has(equipment.templateId)) continue;
       usedIds.add(equipment.templateId);
@@ -98,7 +119,7 @@ export const generateShopItems = (level: number, count: number = 6): ShopItem[] 
   return items;
 };
 
-export const createShop = (level: number, position: { x: number; y: number }, roomIndex: number): Shop => {
+export const createShop = (level: number, position: { x: number; y: number }, roomIndex: number, difficulty: AdventureDifficulty = 'adventurer'): Shop => {
   const shopkeeperIndex = Math.floor(Math.random() * SHOPKEEPER_NAMES.length);
 
   return {
@@ -108,7 +129,7 @@ export const createShop = (level: number, position: { x: number; y: number }, ro
       y: position.y * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE / 2,
     },
     roomIndex,
-    items: generateShopItems(level, 6),
+    items: generateShopItems(level, 6, difficulty),
     shopkeeperName: SHOPKEEPER_NAMES[shopkeeperIndex],
     shopkeeperDialogue: SHOPKEEPER_DIALOGUES[shopkeeperIndex],
   };

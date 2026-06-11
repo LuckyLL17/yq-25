@@ -1,9 +1,10 @@
 import { getGameEngine } from '../game/GameEngine';
 import { useGameStore } from '../store/gameStore';
 import { Skull, RefreshCw, Trophy, Swords, Map, Sparkles, TreeDeciduous } from 'lucide-react';
+import { DIFFICULTY_CONFIGS } from '../data/difficulty';
 
 const DeathScreen = () => {
-  const { currentLevel, killCount, scene, earnedTalentPoints, setShowTalentTree, saveData } = useGameStore();
+  const { currentLevel, killCount, scene, earnedTalentPoints, setShowTalentTree, saveData, difficulty } = useGameStore();
   const engine = getGameEngine();
   
   if (scene !== 'gameover') return null;
@@ -47,6 +48,15 @@ const DeathScreen = () => {
               <Swords className="w-6 h-6 text-red-400 mx-auto mb-1" />
               <div className="text-2xl font-bold text-white">{killCount}</div>
               <div className="text-xs text-gray-400">击杀数量</div>
+            </div>
+
+            <div className="bg-gray-700/50 rounded-lg p-3 col-span-2">
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-lg">{DIFFICULTY_CONFIGS[difficulty].icon}</span>
+                <span className="font-bold" style={{ color: DIFFICULTY_CONFIGS[difficulty].color }}>
+                  {DIFFICULTY_CONFIGS[difficulty].name}难度
+                </span>
+              </div>
             </div>
           </div>
         </div>

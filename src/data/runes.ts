@@ -141,7 +141,84 @@ export const EFFECT_RUNES: Rune[] = [
   },
 ];
 
-export const ALL_RUNES: Rune[] = [...ELEMENT_RUNES, ...EFFECT_RUNES];
+export const LEGENDARY_ELEMENT_RUNES: Rune[] = [
+  {
+    id: 'rune_inferno',
+    name: '地狱业火',
+    type: 'element',
+    element: 'fire',
+    color: '#ff0844',
+    rarity: 'legendary',
+    description: '【传说难度】源自深渊的永恒之火，焚尽一切',
+  },
+  {
+    id: 'rune_absolute_zero',
+    name: '绝对冰零',
+    type: 'element',
+    element: 'ice',
+    color: '#00d2ff',
+    rarity: 'legendary',
+    description: '【传说难度】冻结时空本身的极寒之力',
+  },
+  {
+    id: 'rune_divine_thunder',
+    name: '天罚神雷',
+    type: 'element',
+    element: 'thunder',
+    color: '#f9ca24',
+    rarity: 'legendary',
+    description: '【传说难度】天界降下的审判之雷，无可闪避',
+  },
+];
+
+export const LEGENDARY_EFFECT_RUNES: Rune[] = [
+  {
+    id: 'rune_nova',
+    name: '新星符文',
+    type: 'effect',
+    effect: 'spread',
+    color: '#fd79a8',
+    rarity: 'legendary',
+    description: '【传说难度】技能引发毁灭性新星爆发，覆盖全场',
+  },
+  {
+    id: 'rune_eternity',
+    name: '永恒符文',
+    type: 'effect',
+    effect: 'time',
+    color: '#6c5ce7',
+    rarity: 'legendary',
+    description: '【传说难度】大幅延长所有效果持续时间',
+  },
+  {
+    id: 'rune_annihilation',
+    name: '湮灭符文',
+    type: 'effect',
+    effect: 'power',
+    color: '#e84393',
+    rarity: 'legendary',
+    description: '【传说难度】极大提升伤害，足以湮灭一切',
+  },
+  {
+    id: 'rune_phantom',
+    name: '幻影符文',
+    type: 'effect',
+    effect: 'pierce',
+    color: '#00cec9',
+    rarity: 'legendary',
+    description: '【传说难度】技能化为穿透幻影，无视一切障碍',
+  },
+];
+
+export const ALL_RUNES: Rune[] = [...ELEMENT_RUNES, ...EFFECT_RUNES, ...LEGENDARY_ELEMENT_RUNES, ...LEGENDARY_EFFECT_RUNES];
+
+export const getRunesForDifficulty = (difficulty: string): Rune[] => {
+  const base = [...ELEMENT_RUNES, ...EFFECT_RUNES];
+  if (difficulty === 'hero' || difficulty === 'legend') {
+    return [...base, ...LEGENDARY_ELEMENT_RUNES, ...LEGENDARY_EFFECT_RUNES];
+  }
+  return base;
+};
 
 export const getSkillId = (element: RuneElement, effect: RuneEffect): string => {
   return `skill_${element}_${effect}`;
@@ -330,9 +407,200 @@ export const SKILLS: Record<string, Skill> = {
   },
 };
 
+export const LEGENDARY_SKILLS: Record<string, Skill> = {
+  [getSkillId('fire', 'spread') + '_legendary']: {
+    id: getSkillId('fire', 'spread') + '_legendary',
+    name: '炼狱新星',
+    elementRuneId: 'rune_inferno',
+    effectRuneId: 'rune_nova',
+    element: 'fire',
+    effect: 'spread',
+    damage: 60,
+    range: 200,
+    cooldown: 3000,
+    currentCooldown: 0,
+    duration: 1200,
+    projectileSpeed: 0,
+    description: '炼狱之火席卷一切，超大范围持续燃烧',
+  },
+  [getSkillId('fire', 'time') + '_legendary']: {
+    id: getSkillId('fire', 'time') + '_legendary',
+    name: '永恒熔岩',
+    elementRuneId: 'rune_inferno',
+    effectRuneId: 'rune_eternity',
+    element: 'fire',
+    effect: 'time',
+    damage: 30,
+    range: 100,
+    cooldown: 2500,
+    currentCooldown: 0,
+    duration: 8000,
+    projectileSpeed: 0,
+    description: '熔岩地面持续极长时间灼烧，寸草不生',
+  },
+  [getSkillId('fire', 'power') + '_legendary']: {
+    id: getSkillId('fire', 'power') + '_legendary',
+    name: '末日审判',
+    elementRuneId: 'rune_inferno',
+    effectRuneId: 'rune_annihilation',
+    element: 'fire',
+    effect: 'power',
+    damage: 150,
+    range: 80,
+    cooldown: 4500,
+    currentCooldown: 0,
+    duration: 1000,
+    projectileSpeed: 0,
+    description: '召唤末日陨石，毁灭性单体伤害',
+  },
+  [getSkillId('fire', 'pierce') + '_legendary']: {
+    id: getSkillId('fire', 'pierce') + '_legendary',
+    name: '焚天裂隙',
+    elementRuneId: 'rune_inferno',
+    effectRuneId: 'rune_phantom',
+    element: 'fire',
+    effect: 'pierce',
+    damage: 65,
+    range: 400,
+    cooldown: 2200,
+    currentCooldown: 0,
+    duration: 0,
+    projectileSpeed: 600,
+    description: '撕裂虚空的焚天火焰，贯穿一切',
+  },
+  [getSkillId('ice', 'spread') + '_legendary']: {
+    id: getSkillId('ice', 'spread') + '_legendary',
+    name: '冰河纪元',
+    elementRuneId: 'rune_absolute_zero',
+    effectRuneId: 'rune_nova',
+    element: 'ice',
+    effect: 'spread',
+    damage: 50,
+    range: 250,
+    cooldown: 3500,
+    currentCooldown: 0,
+    duration: 3000,
+    projectileSpeed: 0,
+    description: '冰河之寒覆盖全场，冻结所有敌人',
+  },
+  [getSkillId('ice', 'time') + '_legendary']: {
+    id: getSkillId('ice', 'time') + '_legendary',
+    name: '时间冻结',
+    elementRuneId: 'rune_absolute_zero',
+    effectRuneId: 'rune_eternity',
+    element: 'ice',
+    effect: 'time',
+    damage: 35,
+    range: 120,
+    cooldown: 4000,
+    currentCooldown: 0,
+    duration: 6000,
+    projectileSpeed: 0,
+    description: '将敌人冻结在时间之中，极长时间无法行动',
+  },
+  [getSkillId('ice', 'power') + '_legendary']: {
+    id: getSkillId('ice', 'power') + '_legendary',
+    name: '零度湮灭',
+    elementRuneId: 'rune_absolute_zero',
+    effectRuneId: 'rune_annihilation',
+    element: 'ice',
+    effect: 'power',
+    damage: 130,
+    range: 60,
+    cooldown: 3800,
+    currentCooldown: 0,
+    duration: 1500,
+    projectileSpeed: 0,
+    description: '绝对零度的毁灭一击，目标碎裂为冰晶',
+  },
+  [getSkillId('ice', 'pierce') + '_legendary']: {
+    id: getSkillId('ice', 'pierce') + '_legendary',
+    name: '极寒冰枪',
+    elementRuneId: 'rune_absolute_zero',
+    effectRuneId: 'rune_phantom',
+    element: 'ice',
+    effect: 'pierce',
+    damage: 55,
+    range: 450,
+    cooldown: 1800,
+    currentCooldown: 0,
+    duration: 0,
+    projectileSpeed: 550,
+    description: '穿越一切的极寒冰枪，冻结路径上所有敌人',
+  },
+  [getSkillId('thunder', 'spread') + '_legendary']: {
+    id: getSkillId('thunder', 'spread') + '_legendary',
+    name: '雷神降世',
+    elementRuneId: 'rune_divine_thunder',
+    effectRuneId: 'rune_nova',
+    element: 'thunder',
+    effect: 'spread',
+    damage: 55,
+    range: 220,
+    cooldown: 2800,
+    currentCooldown: 0,
+    duration: 800,
+    projectileSpeed: 0,
+    description: '雷神之力降临，万雷齐发轰击全场',
+  },
+  [getSkillId('thunder', 'time') + '_legendary']: {
+    id: getSkillId('thunder', 'time') + '_legendary',
+    name: '永恒雷暴',
+    elementRuneId: 'rune_divine_thunder',
+    effectRuneId: 'rune_eternity',
+    element: 'thunder',
+    effect: 'time',
+    damage: 35,
+    range: 250,
+    cooldown: 5000,
+    currentCooldown: 0,
+    duration: 8000,
+    projectileSpeed: 0,
+    description: '持续的雷霆风暴，不断打击范围内敌人',
+  },
+  [getSkillId('thunder', 'power') + '_legendary']: {
+    id: getSkillId('thunder', 'power') + '_legendary',
+    name: '万钧天罚',
+    elementRuneId: 'rune_divine_thunder',
+    effectRuneId: 'rune_annihilation',
+    element: 'thunder',
+    effect: 'power',
+    damage: 180,
+    range: 50,
+    cooldown: 5000,
+    currentCooldown: 0,
+    duration: 600,
+    projectileSpeed: 0,
+    description: '天罚之雷的终极形态，一击必杀级伤害',
+  },
+  [getSkillId('thunder', 'pierce') + '_legendary']: {
+    id: getSkillId('thunder', 'pierce') + '_legendary',
+    name: '神雷贯穿',
+    elementRuneId: 'rune_divine_thunder',
+    effectRuneId: 'rune_phantom',
+    element: 'thunder',
+    effect: 'pierce',
+    damage: 70,
+    range: 500,
+    cooldown: 2000,
+    currentCooldown: 0,
+    duration: 0,
+    projectileSpeed: 700,
+    description: '神雷化为贯穿之光，速度和伤害极致提升',
+  },
+};
+
+export const ALL_SKILLS: Record<string, Skill> = { ...SKILLS, ...LEGENDARY_SKILLS };
+
 export const createSkill = (elementRune: Rune, effectRune: Rune): Skill | null => {
   if (elementRune.type !== 'element' || effectRune.type !== 'effect') {
     return null;
+  }
+  const isLegendary = elementRune.rarity === 'legendary' || effectRune.rarity === 'legendary';
+  if (isLegendary) {
+    const legendarySkillId = getSkillId(elementRune.element!, effectRune.effect!) + '_legendary';
+    const legendaryTemplate = LEGENDARY_SKILLS[legendarySkillId];
+    if (legendaryTemplate) return { ...legendaryTemplate, currentCooldown: 0 };
   }
   const skillId = getSkillId(elementRune.element!, effectRune.effect!);
   const skillTemplate = SKILLS[skillId];
@@ -340,9 +608,9 @@ export const createSkill = (elementRune: Rune, effectRune: Rune): Skill | null =
   return { ...skillTemplate, currentCooldown: 0 };
 };
 
-export const getRandomRunes = (count: number): Rune[] => {
+export const getRandomRunes = (count: number, difficulty?: string): Rune[] => {
   const result: Rune[] = [];
-  const pool = [...ALL_RUNES];
+  const pool = difficulty ? [...getRunesForDifficulty(difficulty)] : [...ALL_RUNES];
   for (let i = 0; i < count && pool.length > 0; i++) {
     const index = Math.floor(Math.random() * pool.length);
     result.push(pool[index]);
@@ -351,8 +619,9 @@ export const getRandomRunes = (count: number): Rune[] => {
   return result;
 };
 
-export const getRandomRune = (): Rune => {
-  return ALL_RUNES[Math.floor(Math.random() * ALL_RUNES.length)];
+export const getRandomRune = (difficulty?: string): Rune => {
+  const pool = difficulty ? getRunesForDifficulty(difficulty) : ALL_RUNES;
+  return pool[Math.floor(Math.random() * pool.length)];
 };
 
 export const getRuneById = (id: string): Rune | undefined => {

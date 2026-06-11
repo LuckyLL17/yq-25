@@ -7,9 +7,9 @@ import { Flame, Snowflake, Zap, Leaf, Heart, Swords, Shield, Wind, Target, ZapOf
 import { getGameEngine } from '../game/GameEngine';
 
 const ClassSelect = () => {
-  const { scene } = useGameStore();
+  const { scene, setSelectedClass } = useGameStore();
   const engine = getGameEngine();
-  const [selectedClass, setSelectedClass] = useState<ClassType | null>(null);
+  const [selectedClass, setSelectedClassLocal] = useState<ClassType | null>(null);
 
   if (scene !== 'class_select') return null;
 
@@ -18,12 +18,13 @@ const ClassSelect = () => {
   };
 
   const handleSelectClass = (classId: ClassType) => {
+    setSelectedClassLocal(classId);
     setSelectedClass(classId);
   };
 
   const handleStartGame = () => {
     if (!selectedClass) return;
-    engine.startGameWithClass(selectedClass);
+    engine.setScene('difficulty_select');
   };
 
   const selectedClassData = selectedClass ? getClassById(selectedClass) : null;

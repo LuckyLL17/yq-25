@@ -1,14 +1,15 @@
-import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, ShopItem, ClassType, PlayerClass, GameAction } from '../types/game';
+import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, ShopItem, ClassType, PlayerClass, GameAction, AdventureDifficulty } from '../types/game';
 import { GAME_CONFIG } from '../data/config';
 import { generateDungeon, generateMonsters, generateChests, getPlayerStartPosition, updateFOV, isWalkable } from './utils/dungeon';
 import { getRandomRunes, createSkill, ALL_RUNES, SKILLS, getRuneById } from '../data/runes';
 import { calculateTalentEffects } from '../data/talents';
 import { getClassById, getClassStartingRunes } from '../data/classes';
-import { generateId, distance, clamp, normalize } from './utils/math';
+import { generateId, distance, normalize } from './utils/math';
 import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, drawPet, getElementColor, getElementGlowColor, drawShopkeeper } from './utils/pixel';
 import { createPet, PET_SKILLS } from '../data/pets';
 import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, getChallengeRecord, unlockBadge, getStreakDays, getPetSkill, discoverEquipment, saveEquipment, savePotions, discoverPotion, discoverMaterial, loadSettings, DEFAULT_KEY_BINDINGS } from './utils/storage';
-import { getRandomEquipment, getEquipmentTemplate } from '../data/equipment';
+import { getDifficultyConfig, getTalentPointsReward, getGoldReward } from '../data/difficulty';
+import { getEquipmentTemplatesForDifficulty, getRandomEquipment, getEquipmentTemplate } from '../data/equipment';
 import { getRandomPotion, getRandomMaterial, createPotion, getPotionTemplate, getRecipeByPotionId } from '../data/potions';
 import { getAudioManager } from './AudioManager';
 
@@ -72,6 +73,7 @@ export class GameEngine {
         classType: null,
       },
       selectedClass: null,
+      difficulty: 'adventurer',
       dungeon: null,
       monsters: [],
       chests: [],
@@ -950,9 +952,18 @@ export class GameEngine {
   
   private addEquipmentDrop(level: number) {
     const dropChance = 0.1 + level * 0.02;
+    const diffConfig = getDifficultyConfig(this.state.difficulty);
     
     if (Math.random() < dropChance) {
-      const equipment = getRandomEquipment(Math.max(1, Math.floor(level / 2)));
+      const availableTemplates = getEquipmentTemplatesForDifficulty(this.state.difficulty);
+      let template;
+      if (Math.random() < diffConfig.equipmentRarityBoost) {
+        const highRarity = availableTemplates.filter(t => t.rarity === 'legendary' || t.rarity === 'epic');
+        template = highRarity.length > 0 ? highRarity[Math.floor(Math.random() * highRarity.length)] : availableTemplates[Math.floor(Math.random() * availableTemplates.length)];
+      } else {
+        template = availableTemplates[Math.floor(Math.random() * availableTemplates.length)];
+      }
+      const equipment = template ? getRandomEquipment(Math.max(1, Math.floor(level / 2))) : null;
       if (equipment) {
         this.state.equipmentInventory.push(equipment);
         discoverEquipment(equipment.templateId);
@@ -1100,11 +1111,12 @@ export class GameEngine {
       savePotions(this.state.potionInventory, this.state.materialInventory);
       
       const goldAmount = Math.floor(20 + this.state.currentLevel * 10 + Math.random() * 30);
+      const adjustedGold = getGoldReward(goldAmount, this.state.difficulty);
       const equipmentStats = this.getEquipmentStats();
       const saveData = loadSaveData();
       const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
       const goldBonus = 1 + talentEffects.goldBonus + equipmentStats.goldBonus;
-      this.state.gold += Math.floor(goldAmount * goldBonus);
+      this.state.gold += Math.floor(adjustedGold * goldBonus);
     }
     
     for (let i = 0; i < 15; i++) {
@@ -1130,9 +1142,10 @@ export class GameEngine {
     
     const saveData = loadSaveData();
     const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
+    const difficulty = this.state.difficulty;
     
-    const newDungeon = generateDungeon(this.state.currentLevel);
-    const newMonsters = generateMonsters(newDungeon, this.state.currentLevel);
+    const newDungeon = generateDungeon(this.state.currentLevel, difficulty);
+    const newMonsters = generateMonsters(newDungeon, this.state.currentLevel, difficulty);
     const newChests = generateChests(newDungeon, this.state.currentLevel);
     const startPos = getPlayerStartPosition(newDungeon);
     
@@ -1168,7 +1181,7 @@ export class GameEngine {
     this.startGameWithClass('fire_mage');
   }
 
-  public startGameWithClass(classId: ClassType) {
+  public startGameWithClass(classId: ClassType, difficulty: AdventureDifficulty = 'adventurer') {
     const playerClass = getClassById(classId);
     if (!playerClass) return;
 
@@ -1185,7 +1198,7 @@ export class GameEngine {
     const baseRuneCount = 4 + talentEffects.startRunes;
     const bonusRuneCount = Math.max(0, baseRuneCount - initialRunes.length);
     if (bonusRuneCount > 0) {
-      const bonusRunes = getRandomRunes(bonusRuneCount);
+      const bonusRunes = getRandomRunes(bonusRuneCount, difficulty);
       initialRunes.push(...bonusRunes);
     }
     
@@ -1194,8 +1207,8 @@ export class GameEngine {
       if (i < 4) equipped[i] = rune;
     });
     
-    const dungeon = generateDungeon(1);
-    const monsters = generateMonsters(dungeon, 1);
+    const dungeon = generateDungeon(1, difficulty);
+    const monsters = generateMonsters(dungeon, 1, difficulty);
     const chests = generateChests(dungeon, 1);
     const startPos = getPlayerStartPosition(dungeon);
     
@@ -1211,6 +1224,7 @@ export class GameEngine {
     
     this.state.scene = 'playing';
     this.state.selectedClass = classId;
+    this.state.difficulty = difficulty;
     this.state.dungeon = updatedDungeon;
     this.state.monsters = monsters;
     this.state.chests = chests;
@@ -1324,7 +1338,8 @@ export class GameEngine {
     if (this.state.isChallengeMode && !this.state.challengeCompleted) {
       this.failChallenge();
     } else {
-      const talentPointsEarned = Math.max(1, Math.floor(this.state.currentLevel / 2) + Math.floor(this.state.killCount / 10));
+      const baseTalentPoints = Math.max(1, Math.floor(this.state.currentLevel / 2) + Math.floor(this.state.killCount / 10));
+      const talentPointsEarned = getTalentPointsReward(baseTalentPoints, this.state.difficulty);
       this.state.earnedTalentPoints = talentPointsEarned;
       
       const saveData = addTalentPoints(talentPointsEarned);

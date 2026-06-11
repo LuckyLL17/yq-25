@@ -61,7 +61,28 @@ export interface Dungeon {
   shop: Shop | null;
 }
 
-export type GameScene = 'menu' | 'class_select' | 'playing' | 'gameover' | 'victory' | 'codex';
+export type GameScene = 'menu' | 'class_select' | 'difficulty_select' | 'playing' | 'gameover' | 'victory' | 'codex';
+
+export type AdventureDifficulty = 'explorer' | 'adventurer' | 'hero' | 'legend';
+
+export interface DifficultyConfig {
+  id: AdventureDifficulty;
+  name: string;
+  description: string;
+  color: string;
+  borderColor: string;
+  icon: string;
+  hpMultiplier: number;
+  damageMultiplier: number;
+  countMultiplier: number;
+  levelMultiplierBonus: number;
+  goldMultiplier: number;
+  talentPointsMultiplier: number;
+  minRuneRarity: RuneRarity;
+  minEquipmentRarity: EquipmentRarity;
+  runeRarityBoost: number;
+  equipmentRarityBoost: number;
+}
 
 export type ClassType = 'fire_mage' | 'frost_warlock' | 'thunder_assassin' | 'nature_guardian';
 
@@ -91,7 +112,7 @@ export interface PlayerClass {
 export type RuneElement = 'fire' | 'ice' | 'thunder';
 export type RuneEffect = 'spread' | 'time' | 'power' | 'pierce';
 export type RuneType = 'element' | 'effect';
-export type RuneRarity = 'common' | 'rare' | 'epic';
+export type RuneRarity = 'common' | 'rare' | 'epic' | 'legendary';
 
 export interface Rune {
   id: string;
@@ -349,6 +370,7 @@ export interface GameState {
   scene: GameScene;
   player: Player;
   selectedClass: ClassType | null;
+  difficulty: AdventureDifficulty;
   dungeon: Dungeon | null;
   monsters: Monster[];
   chests: Chest[];

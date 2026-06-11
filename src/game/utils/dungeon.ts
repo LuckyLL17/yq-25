@@ -1,9 +1,11 @@
 import type { Dungeon, Tile, Room, Position, Chest, Monster, Shop } from '../../types/game';
+import type { AdventureDifficulty } from '../../types/game';
 import { GAME_CONFIG } from '../../data/config';
 import { randomInt, randomRange } from './math';
 import { createMonster, getRandomMonsterType } from '../../data/monsters';
 import { getRandomRune } from '../../data/runes';
 import { createShop, SHOP_SPAWN_CHANCE } from '../../data/shop';
+import { getDifficultyConfig } from '../../data/difficulty';
 
 let chestIdCounter = 0;
 
@@ -110,7 +112,7 @@ const connectRooms = (tiles: Tile[][], rooms: Room[]) => {
   }
 };
 
-export const generateDungeon = (level: number): Dungeon => {
+export const generateDungeon = (level: number, difficulty: AdventureDifficulty = 'adventurer'): Dungeon => {
   const width = GAME_CONFIG.MAP_WIDTH;
   const height = GAME_CONFIG.MAP_HEIGHT;
   
@@ -135,7 +137,7 @@ export const generateDungeon = (level: number): Dungeon => {
     const shopRoomIndex = Math.max(1, Math.floor(rooms.length / 2));
     const shopRoom = rooms[shopRoomIndex];
     const shopTilePos = { x: shopRoom.centerX, y: shopRoom.centerY };
-    shop = createShop(level, shopTilePos, shopRoomIndex);
+    shop = createShop(level, shopTilePos, shopRoomIndex, difficulty);
   }
   
   return {
@@ -163,10 +165,12 @@ export const getRandomFloorPosition = (dungeon: Dungeon, excludeRooms: Room[] = 
   };
 };
 
-export const generateMonsters = (dungeon: Dungeon, level: number): Monster[] => {
+export const generateMonsters = (dungeon: Dungeon, level: number, difficulty: AdventureDifficulty = 'adventurer'): Monster[] => {
+  const diffConfig = getDifficultyConfig(difficulty);
   const monsters: Monster[] = [];
-  const count = GAME_CONFIG.MONSTERS_PER_LEVEL + Math.floor(level * 1.5);
-  const levelMultiplier = 1 + (level - 1) * 0.3;
+  const baseCount = GAME_CONFIG.MONSTERS_PER_LEVEL + Math.floor(level * 1.5);
+  const count = Math.floor(baseCount * diffConfig.countMultiplier);
+  const levelMultiplier = (1 + (level - 1) * 0.3 + diffConfig.levelMultiplierBonus) * diffConfig.hpMultiplier;
   
   const firstRoom = dungeon.rooms[0];
   const excludeRooms = [firstRoom];
@@ -180,6 +184,8 @@ export const generateMonsters = (dungeon: Dungeon, level: number): Monster[] => 
       x: position.x * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE / 2,
       y: position.y * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE / 2,
     }, levelMultiplier);
+    
+    monster.damage = Math.floor(monster.damage * diffConfig.damageMultiplier);
     
     monsters.push(monster);
   }

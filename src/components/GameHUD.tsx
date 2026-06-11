@@ -5,6 +5,7 @@ import { SKILLS } from '../data/runes';
 import type { RuneElement, Potion } from '../types/game';
 import { formatTime } from '../data/challenges';
 import { getPotionTemplate } from '../data/potions';
+import { DIFFICULTY_CONFIGS } from '../data/difficulty';
 
 const getElementColorClass = (element: RuneElement): string => {
   switch (element) {
@@ -39,6 +40,7 @@ const GameHUD = () => {
     potionInventory,
     potionCooldowns,
     pet,
+    difficulty,
     setShowPotionPanel,
     setShowSettings,
     setIsPaused,
@@ -113,6 +115,16 @@ const GameHUD = () => {
           )}
           
           <div className="flex gap-3">
+            <div
+              className="bg-gray-900/90 border-4 px-4 py-2 rounded-lg flex items-center gap-2"
+              style={{ borderColor: DIFFICULTY_CONFIGS[difficulty].borderColor }}
+            >
+              <span className="text-lg">{DIFFICULTY_CONFIGS[difficulty].icon}</span>
+              <span className="font-bold font-mono" style={{ color: DIFFICULTY_CONFIGS[difficulty].color }}>
+                {DIFFICULTY_CONFIGS[difficulty].name}
+              </span>
+            </div>
+
             <div className="bg-gray-900/90 border-4 border-gray-700 px-4 py-2 rounded-lg flex items-center gap-2">
               <Map className="w-5 h-5 text-purple-400" />
               <span className="text-white font-bold font-mono">第 {currentLevel} 层</span>

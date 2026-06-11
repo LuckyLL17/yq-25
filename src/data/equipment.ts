@@ -296,6 +296,62 @@ export const EQUIPMENT_TEMPLATES: EquipmentTemplate[] = [
     basePrice: 1200,
     upgradeMultiplier: 1.5,
   },
+  {
+    id: 'weapon_hellblade',
+    name: '地狱之刃',
+    type: 'weapon',
+    rarity: 'legendary',
+    color: '#ff0844',
+    icon: '🗡️',
+    description: '【英雄/传说难度】来自深渊的魔剑，吞噬一切',
+    baseStats: [
+      { type: 'attack', value: 55 },
+      { type: 'critChance', value: 0.18 },
+      { type: 'critDamage', value: 0.4 },
+      { type: 'attackSpeed', value: 0.2 },
+    ],
+    baseDurability: 350,
+    basePrice: 2000,
+    upgradeMultiplier: 1.55,
+  },
+  {
+    id: 'armor_void_cloak',
+    name: '虚空斗篷',
+    type: 'armor',
+    rarity: 'legendary',
+    color: '#6c5ce7',
+    icon: '🌑',
+    description: '【英雄/传说难度】来自虚空之外的护甲，扭曲时空',
+    baseStats: [
+      { type: 'defense', value: 40 },
+      { type: 'maxHp', value: 150 },
+      { type: 'speed', value: 0.12 },
+      { type: 'attackSpeed', value: 0.1 },
+    ],
+    baseDurability: 350,
+    basePrice: 1800,
+    upgradeMultiplier: 1.55,
+  },
+  {
+    id: 'accessory_dragon_heart',
+    name: '龙心坠饰',
+    type: 'accessory',
+    rarity: 'legendary',
+    color: '#e17055',
+    icon: '💎',
+    description: '【英雄/传说难度】远古巨龙的心脏结晶，蕴含无穷力量',
+    baseStats: [
+      { type: 'maxHp', value: 80 },
+      { type: 'attack', value: 30 },
+      { type: 'critChance', value: 0.15 },
+      { type: 'critDamage', value: 0.35 },
+      { type: 'speed', value: 0.1 },
+      { type: 'goldBonus', value: 0.15 },
+    ],
+    baseDurability: 250,
+    basePrice: 2200,
+    upgradeMultiplier: 1.55,
+  },
 ];
 
 export const RARITY_COLORS: Record<EquipmentRarity, string> = {
@@ -506,4 +562,13 @@ export const getBuyPrice = (equipment: Equipment): number => {
 export const getSellPrice = (equipment: Equipment): number => {
   const durabilityRatio = equipment.durability / equipment.maxDurability;
   return Math.floor(equipment.price * 0.3 * durabilityRatio);
+};
+
+export const DIFFICULTY_EXCLUSIVE_IDS = ['weapon_hellblade', 'armor_void_cloak', 'accessory_dragon_heart'];
+
+export const getEquipmentTemplatesForDifficulty = (difficulty: string): EquipmentTemplate[] => {
+  if (difficulty === 'hero' || difficulty === 'legend') {
+    return EQUIPMENT_TEMPLATES;
+  }
+  return EQUIPMENT_TEMPLATES.filter(t => !DIFFICULTY_EXCLUSIVE_IDS.includes(t.id));
 };

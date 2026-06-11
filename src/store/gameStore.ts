@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { GameScene, Rune, Skill, Player, Monster, Chest, SaveData, DailyChallenge, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, Pet, ClassType, GameSettings } from '../types/game';
+import type { GameScene, Rune, Skill, Player, Monster, Chest, SaveData, DailyChallenge, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, Pet, ClassType, GameSettings, AdventureDifficulty } from '../types/game';
 import { loadSaveData, unlockTalent as saveUnlockTalent, saveEquipment, savePotions, loadSettings } from '../game/utils/storage';
 import { getTalentCost, canUnlockTalent } from '../data/talents';
 import { upgradeEquipment as upgradeEquip, getUpgradeCost, getEquipmentTemplate, generateShopEquipment, getBuyPrice, getSellPrice } from '../data/equipment';
@@ -87,8 +87,10 @@ interface GameStore {
   showSettings: boolean;
   isPaused: boolean;
   settings: GameSettings;
+  difficulty: AdventureDifficulty;
   
   setScene: (scene: GameScene) => void;
+  setSelectedClass: (classType: ClassType | null) => void;
   setPlayer: (player: Player) => void;
   setMonsters: (monsters: Monster[]) => void;
   setChests: (chests: Chest[]) => void;
@@ -135,6 +137,7 @@ interface GameStore {
   setShowSettings: (show: boolean) => void;
   setIsPaused: (paused: boolean) => void;
   updateSettings: (settings: GameSettings) => void;
+  setDifficulty: (difficulty: AdventureDifficulty) => void;
 }
 
 export const useGameStore = create<GameStore>((set, get) => {
@@ -192,8 +195,10 @@ export const useGameStore = create<GameStore>((set, get) => {
   showSettings: false,
   isPaused: false,
   settings: loadSettings(),
+  difficulty: 'adventurer',
   
   setScene: (scene) => set({ scene }),
+  setSelectedClass: (selectedClass) => set({ selectedClass }),
   setPlayer: (player) => set({ player }),
   setMonsters: (monsters) => set({ monsters }),
   setChests: (chests) => set({ chests }),
@@ -223,6 +228,7 @@ export const useGameStore = create<GameStore>((set, get) => {
   setShowSettings: (showSettings) => set({ showSettings }),
   setIsPaused: (isPaused) => set({ isPaused }),
   updateSettings: (settings) => set({ settings }),
+  setDifficulty: (difficulty) => set({ difficulty }),
   setDraggedRune: (draggedRune) => set({ draggedRune }),
   
   addToast: (toast) => {
@@ -271,6 +277,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     set({
       scene: state.scene,
       selectedClass: state.selectedClass || null,
+      difficulty: state.difficulty || 'adventurer',
       player: state.player,
       runeInventory: state.runeInventory,
       equippedRunes: state.equippedRunes,
