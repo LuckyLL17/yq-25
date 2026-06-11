@@ -100,6 +100,7 @@ export const MONSTER_TEMPLATES: Record<MonsterType, {
   detectRange: number;
   attackRange: number;
   fleeThreshold: number;
+  maxSummons?: number;
 }> = {
   slime: {
     name: '史莱姆',

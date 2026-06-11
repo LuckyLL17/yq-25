@@ -5,7 +5,6 @@ import { getTalentCost, canUnlockTalent } from '../data/talents';
 import { upgradeEquipment as upgradeEquip, getUpgradeCost, getEquipmentTemplate, generateShopEquipment, getBuyPrice, getSellPrice } from '../data/equipment';
 import { createPotion, getPotionTemplate } from '../data/potions';
 import { synthesizeRunes, decomposeRune, canSynthesize, RARITY_CONFIG } from '../data/runes';
-import type { Rune } from '../types/game';
 
 const loadEquipmentFromSaveData = (saveData: SaveData): { inventory: Equipment[]; equipped: Record<EquipmentSlotType, Equipment | null> } => {
   const inventory = saveData.equipmentInventory || [];
