@@ -5,7 +5,7 @@ import { getRandomRunes, createSkill, ALL_RUNES, SKILLS, getRuneById } from '../
 import { calculateTalentEffects } from '../data/talents';
 import { getClassById, getClassStartingRunes } from '../data/classes';
 import { generateId, distance, normalize } from './utils/math';
-import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, drawPet, getElementColor, getElementGlowColor, drawShopkeeper } from './utils/pixel';
+import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, drawPet, getElementColor, getElementGlowColor, drawShopkeeper, drawDecoration } from './utils/pixel';
 import { createPet, PET_SKILLS } from '../data/pets';
 import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, getChallengeRecord, unlockBadge, getStreakDays, getPetSkill, discoverEquipment, saveEquipment, savePotions, discoverPotion, discoverMaterial, loadSettings, DEFAULT_KEY_BINDINGS } from './utils/storage';
 import { getDifficultyConfig, getTalentPointsReward, getGoldReward } from '../data/difficulty';
@@ -2311,6 +2311,9 @@ export class GameEngine {
     const endTileX = Math.min(this.state.dungeon.width, Math.ceil((cam.x + this.canvas.width) / tileSize) + 1);
     const endTileY = Math.min(this.state.dungeon.height, Math.ceil((cam.y + this.canvas.height) / tileSize) + 1);
     
+    const theme = this.state.dungeon.themeConfig;
+    const colors = theme.colors;
+    
     for (let y = startTileY; y < endTileY; y++) {
       for (let x = startTileX; x < endTileX; x++) {
         const tile = this.state.dungeon.tiles[y][x];
@@ -2322,17 +2325,50 @@ export class GameEngine {
         }
         
         if (tile.type === 'wall') {
-          ctx.fillStyle = '#4a4a6a';
+          ctx.fillStyle = colors.wall;
           ctx.fillRect(screenX, screenY, tileSize, tileSize);
-          ctx.fillStyle = '#3a3a5a';
+          ctx.fillStyle = colors.wallDark;
           ctx.fillRect(screenX, screenY + tileSize - 4, tileSize, 4);
-          ctx.fillStyle = '#5a5a7a';
+          ctx.fillStyle = colors.wallLight;
           ctx.fillRect(screenX, screenY, tileSize, 4);
-        } else {
-          ctx.fillStyle = '#2d2d44';
+          
+          if ((tile.variant || 0) % 3 === 0) {
+            ctx.fillStyle = colors.wallDark;
+            ctx.fillRect(screenX + 4, screenY + 8, 4, 8);
+          }
+        } else if (tile.type === 'pillar') {
+          ctx.fillStyle = colors.wallDark;
+          ctx.fillRect(screenX, screenY, tileSize, tileSize);
+        } else if (tile.type === 'water') {
+          ctx.fillStyle = '#2a4a8a';
           ctx.fillRect(screenX, screenY, tileSize, tileSize);
           
-          ctx.fillStyle = '#252538';
+          const waveOffset = Math.sin(Date.now() / 500 + x + y) * 2;
+          ctx.fillStyle = '#3a5a9a';
+          ctx.fillRect(screenX, screenY + waveOffset + 4, tileSize, 4);
+          ctx.fillStyle = '#4a6aaa';
+          ctx.fillRect(screenX + 4, screenY + waveOffset + 12, tileSize - 8, 2);
+        } else if (tile.type === 'lava') {
+          ctx.fillStyle = '#c0392b';
+          ctx.fillRect(screenX, screenY, tileSize, tileSize);
+          
+          const lavaGlow = (Math.sin(Date.now() / 300 + x * 0.5 + y * 0.5) + 1) / 2;
+          ctx.fillStyle = `rgba(255, 107, 53, ${0.3 + lavaGlow * 0.4})`;
+          ctx.fillRect(screenX, screenY, tileSize, tileSize);
+          
+          ctx.fillStyle = '#e74c3c';
+          ctx.fillRect(screenX + 4, screenY + 8, 8, 4);
+          ctx.fillRect(screenX + 16, screenY + 16, 6, 4);
+          
+          if (Math.random() < 0.02) {
+            ctx.fillStyle = '#ff6b35';
+            ctx.fillRect(screenX + 8 + Math.random() * 12, screenY + 4, 2, 4);
+          }
+        } else {
+          ctx.fillStyle = colors.floor;
+          ctx.fillRect(screenX, screenY, tileSize, tileSize);
+          
+          ctx.fillStyle = colors.floorAlt;
           if ((x + y) % 2 === 0) {
             ctx.fillRect(screenX + 2, screenY + 2, tileSize - 4, tileSize - 4);
           }
@@ -2351,6 +2387,41 @@ export class GameEngine {
     const stairsTile = this.state.dungeon.tiles[stairs.y][stairs.x];
     if (stairsTile.visible) {
       drawStairs(ctx, stairsScreenX, stairsScreenY, 2);
+    }
+    
+    const animFrame = Math.floor(Date.now() / 200);
+    for (const decor of this.state.dungeon.decorations) {
+      const screenX = decor.position.x - cam.x;
+      const screenY = decor.position.y - cam.y;
+      
+      if (
+        decor.tileX >= 0 && decor.tileX < this.state.dungeon.width &&
+        decor.tileY >= 0 && decor.tileY < this.state.dungeon.height &&
+        this.state.dungeon.tiles[decor.tileY][decor.tileX].visible
+      ) {
+        const glowColor = decor.glowColor || this.state.dungeon.themeConfig.colors.accent;
+        
+        if (decor.glowColor) {
+          const glowAlpha = 0.15 + Math.sin(Date.now() / 300) * 0.1;
+          ctx.fillStyle = decor.glowColor;
+          ctx.globalAlpha = glowAlpha;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, tileSize * 1.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        
+        drawDecoration(
+          ctx,
+          decor.type,
+          screenX,
+          screenY,
+          decor.variant,
+          glowColor,
+          animFrame,
+          2
+        );
+      }
     }
     
     for (const chest of this.state.chests) {

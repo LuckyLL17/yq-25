@@ -15,12 +15,51 @@ export interface Rectangle {
   height: number;
 }
 
-export type TileType = 'wall' | 'floor' | 'door' | 'stairs' | 'chest';
+export type TileType = 'wall' | 'floor' | 'door' | 'stairs' | 'chest' | 'decoration' | 'pillar' | 'torch' | 'water' | 'lava';
+
+export type RoomShape = 'rectangle' | 'circle' | 'hexagon' | 'irregular';
+
+export type DecorationType = 'torch' | 'pillar' | 'skull' | 'altar' | 'crate' | 'barrel' | 'bones' | 'cobweb' | 'crystal' | 'rune_stone' | 'roots' | 'mushroom' | 'vines' | 'icicle';
+
+export type CorridorStyle = 'straight' | 'zigzag' | 'curved' | 'wide' | 'branching';
+
+export type DungeonTheme = 'stone' | 'forest' | 'ice' | 'fire' | 'desert' | 'crystal' | 'ruins' | 'swamp';
 
 export interface Tile {
   type: TileType;
   explored: boolean;
   visible: boolean;
+  decoration?: DecorationType;
+  variant?: number;
+}
+
+export interface Decoration {
+  id: string;
+  type: DecorationType;
+  position: Position;
+  tileX: number;
+  tileY: number;
+  variant: number;
+  interactable: boolean;
+  glowColor?: string;
+}
+
+export interface ThemeColors {
+  wall: string;
+  wallDark: string;
+  wallLight: string;
+  floor: string;
+  floorAlt: string;
+  accent: string;
+}
+
+export interface ThemeConfig {
+  id: DungeonTheme;
+  name: string;
+  colors: ThemeColors;
+  decorationWeights: Partial<Record<DecorationType, number>>;
+  hasHazard: boolean;
+  hazardType?: 'water' | 'lava';
 }
 
 export interface Room {
@@ -30,6 +69,8 @@ export interface Room {
   height: number;
   centerX: number;
   centerY: number;
+  shape: RoomShape;
+  rotation?: number;
 }
 
 export type ShopItemType = 'rune' | 'equipment' | 'potion';
@@ -59,6 +100,10 @@ export interface Dungeon {
   level: number;
   stairsPosition: Position;
   shop: Shop | null;
+  theme: DungeonTheme;
+  themeConfig: ThemeConfig;
+  decorations: Decoration[];
+  corridorStyle: CorridorStyle;
 }
 
 export type GameScene = 'menu' | 'class_select' | 'difficulty_select' | 'playing' | 'gameover' | 'victory' | 'codex';
