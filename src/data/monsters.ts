@@ -397,6 +397,7 @@ export const createMonster = (
     summonCount: 0,
     maxSummons: (template as any).maxSummons || 0,
     fleeThreshold: template.fleeThreshold,
+    stateCooldown: 0,
   };
 };
 
@@ -435,6 +436,7 @@ export const createBoss = (
     summonCount: 0,
     maxSummons: 6,
     fleeThreshold: 0,
+    stateCooldown: 0,
   };
 };
 

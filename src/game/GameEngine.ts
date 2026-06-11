@@ -266,7 +266,8 @@ export class GameEngine {
         }
       }
 
-      monster.stateTimer -= deltaTime;
+      if (monster.stateTimer > 0) monster.stateTimer -= deltaTime;
+      if (monster.stateCooldown > 0) monster.stateCooldown -= deltaTime;
 
       switch (monster.aiType) {
         case 'passive':
@@ -314,13 +315,22 @@ export class GameEngine {
     this.state.monsters = this.state.monsters.filter(m => m.hp > 0);
   }
 
+  private tryChangeState(monster: Monster, newState: MonsterState, minDuration: number = 500, cooldown: number = 200): boolean {
+    if (monster.state === newState) return true;
+    if (monster.stateCooldown > 0 || monster.stateTimer > 0) return false;
+    monster.state = newState;
+    monster.stateTimer = minDuration;
+    monster.stateCooldown = cooldown;
+    return true;
+  }
+
   private updatePassiveAI(monster: Monster, dt: number, speedMultiplier: number, distToPlayer: number) {
     if (distToPlayer < monster.detectRange && monster.state === 'idle') {
-      monster.state = 'chase';
+      this.tryChangeState(monster, 'chase', 1000, 300);
     }
     if (monster.state === 'chase') {
-      if (distToPlayer > monster.detectRange * 1.5) {
-        monster.state = 'idle';
+      if (distToPlayer > monster.detectRange * 1.5 && monster.stateTimer <= 0) {
+        this.tryChangeState(monster, 'idle', 1500, 300);
         return;
       }
       this.moveMonsterTowardPlayer(monster, dt, speedMultiplier);
@@ -329,20 +339,22 @@ export class GameEngine {
 
   private updateAggressiveAI(monster: Monster, dt: number, speedMultiplier: number, distToPlayer: number) {
     if (distToPlayer < monster.detectRange) {
-      monster.state = 'chase';
-      this.moveMonsterTowardPlayer(monster, dt, speedMultiplier);
+      if (this.tryChangeState(monster, 'chase', 500, 200)) {
+        this.moveMonsterTowardPlayer(monster, dt, speedMultiplier);
+      }
     } else {
-      monster.state = 'idle';
+      this.tryChangeState(monster, 'idle', 1000, 300);
     }
   }
 
   private updatePatrolAI(monster: Monster, dt: number, speedMultiplier: number, distToPlayer: number) {
     if (distToPlayer < monster.detectRange) {
-      monster.state = 'chase';
-      this.moveMonsterTowardPlayer(monster, dt, speedMultiplier);
+      if (this.tryChangeState(monster, 'chase', 800, 300)) {
+        this.moveMonsterTowardPlayer(monster, dt, speedMultiplier);
+      }
       return;
     }
-    monster.state = 'idle';
+    this.tryChangeState(monster, 'idle', 0, 0);
     if (Math.random() < 0.01) {
       monster.direction = Math.random() < 0.5 ? -1 : 1;
     }
@@ -356,100 +368,170 @@ export class GameEngine {
 
   private updateRangedAI(monster: Monster, dt: number, speedMultiplier: number, distToPlayer: number) {
     const hpPercent = monster.hp / monster.maxHp;
+    const tooClose = distToPlayer < 40;
+    const inFleeRange = distToPlayer < 60;
+    const lowHp = hpPercent < monster.fleeThreshold;
 
-    if (hpPercent < monster.fleeThreshold && distToPlayer < 80) {
-      monster.state = 'flee';
-      this.moveMonsterAwayFromPlayer(monster, dt, speedMultiplier);
+    if (tooClose || (lowHp && inFleeRange)) {
+      this.tryChangeState(monster, 'flee', 800, 300);
+      this.moveMonsterAwayFromPlayer(monster, dt, speedMultiplier * 1.3);
       return;
     }
 
     if (distToPlayer < monster.detectRange) {
-      if (distToPlayer > monster.attackRange) {
-        monster.state = 'chase';
+      const idealMin = 80;
+      const idealMax = monster.attackRange * 0.85;
+
+      if (distToPlayer < idealMin) {
+        this.tryChangeState(monster, 'flee', 600, 250);
+        this.moveMonsterAwayFromPlayer(monster, dt, speedMultiplier);
+        return;
+      }
+
+      if (distToPlayer > idealMax) {
+        this.tryChangeState(monster, 'chase', 700, 300);
         this.moveMonsterTowardPlayer(monster, dt, speedMultiplier);
-      } else {
-        monster.state = 'attack';
+        return;
+      }
+
+      if (this.tryChangeState(monster, 'attack', 400, 200)) {
         this.tryUseMonsterSkill(monster, 'projectile');
       }
     } else {
-      monster.state = 'idle';
+      this.tryChangeState(monster, 'idle', 1000, 300);
     }
   }
 
   private updateCasterAI(monster: Monster, dt: number, speedMultiplier: number, distToPlayer: number) {
     const hpPercent = monster.hp / monster.maxHp;
+    const tooClose = distToPlayer < 50;
+    const lowHp = hpPercent < monster.fleeThreshold;
 
-    if (hpPercent < monster.fleeThreshold && distToPlayer < 80) {
-      monster.state = 'flee';
-      this.moveMonsterAwayFromPlayer(monster, dt, speedMultiplier);
+    if (tooClose || (lowHp && distToPlayer < 80)) {
+      this.tryChangeState(monster, 'flee', 900, 300);
+      this.moveMonsterAwayFromPlayer(monster, dt, speedMultiplier * 1.2);
       return;
     }
 
     if (distToPlayer < monster.detectRange) {
-      if (distToPlayer > monster.attackRange) {
-        monster.state = 'chase';
+      const idealMin = 90;
+      const idealMax = monster.attackRange * 0.8;
+
+      if (distToPlayer < idealMin) {
+        this.tryChangeState(monster, 'flee', 700, 300);
+        this.moveMonsterAwayFromPlayer(monster, dt, speedMultiplier);
+        return;
+      }
+
+      if (distToPlayer > idealMax) {
+        this.tryChangeState(monster, 'chase', 800, 300);
         this.moveMonsterTowardPlayer(monster, dt, speedMultiplier);
-      } else {
-        monster.state = 'cast';
+        return;
+      }
+
+      if (this.tryChangeState(monster, 'cast', 500, 250)) {
         this.tryUseMonsterSkill(monster, 'projectile');
         this.tryUseMonsterSkill(monster, 'aoe');
       }
     } else {
-      monster.state = 'idle';
+      this.tryChangeState(monster, 'idle', 1000, 300);
     }
   }
 
   private updateSummonerAI(monster: Monster, dt: number, speedMultiplier: number, distToPlayer: number) {
     const hpPercent = monster.hp / monster.maxHp;
+    const tooClose = distToPlayer < 60;
+    const lowHp = hpPercent < monster.fleeThreshold;
 
-    if (hpPercent < monster.fleeThreshold && distToPlayer < 80) {
-      monster.state = 'flee';
-      this.moveMonsterAwayFromPlayer(monster, dt, speedMultiplier);
+    if (tooClose || (lowHp && distToPlayer < 90)) {
+      this.tryChangeState(monster, 'flee', 1000, 400);
+      this.moveMonsterAwayFromPlayer(monster, dt, speedMultiplier * 1.2);
       return;
     }
 
     if (distToPlayer < monster.detectRange) {
-      const currentSummons = this.state.monsters.filter(m => m.hp > 0 && !m.isBoss).length;
-      if (currentSummons < monster.maxSummons) {
-        this.tryUseMonsterSkill(monster, 'summon');
+      const ownSummons = this.countOwnSummons(monster);
+      if (ownSummons < monster.maxSummons) {
+        if (this.tryChangeState(monster, 'summon', 800, 500)) {
+          this.tryUseMonsterSkill(monster, 'summon');
+          return;
+        }
       }
-      if (distToPlayer > monster.attackRange) {
-        monster.state = 'chase';
+
+      const idealMin = 100;
+      const idealMax = monster.attackRange * 0.75;
+
+      if (distToPlayer < idealMin) {
+        this.tryChangeState(monster, 'flee', 700, 300);
+        this.moveMonsterAwayFromPlayer(monster, dt, speedMultiplier * 0.6);
+        return;
+      }
+
+      if (distToPlayer > idealMax) {
+        this.tryChangeState(monster, 'chase', 900, 400);
         this.moveMonsterTowardPlayer(monster, dt, speedMultiplier * 0.5);
-      } else {
-        monster.state = 'cast';
+        return;
+      }
+
+      if (this.tryChangeState(monster, 'cast', 500, 300)) {
         this.tryUseMonsterSkill(monster, 'projectile');
       }
     } else {
-      monster.state = 'idle';
+      this.tryChangeState(monster, 'idle', 1000, 400);
     }
   }
 
   private updateHealerAI(monster: Monster, dt: number, speedMultiplier: number, distToPlayer: number) {
     const hpPercent = monster.hp / monster.maxHp;
+    const tooClose = distToPlayer < 50;
+    const lowHp = hpPercent < monster.fleeThreshold;
 
-    if (hpPercent < monster.fleeThreshold && distToPlayer < 80) {
-      monster.state = 'flee';
-      this.moveMonsterAwayFromPlayer(monster, dt, speedMultiplier);
+    if (tooClose || (lowHp && distToPlayer < 80)) {
+      this.tryChangeState(monster, 'flee', 900, 400);
+      this.moveMonsterAwayFromPlayer(monster, dt, speedMultiplier * 1.2);
       return;
     }
 
+    const healSkill = monster.skills.find(s => s.type === 'heal');
+    const healRange = healSkill?.range || 120;
+
+    const injuredAlly = this.findInjuredAlly(monster, healRange);
+    if (injuredAlly && distToPlayer < monster.detectRange) {
+      const distToAlly = distance(monster.position, injuredAlly.position);
+      if (distToAlly < healRange) {
+        if (this.tryChangeState(monster, 'heal', 600, 400)) {
+          this.tryUseMonsterSkill(monster, 'heal');
+          return;
+        }
+      } else {
+        if (this.tryChangeState(monster, 'chase', 700, 300)) {
+          this.moveMonsterTowardTarget(monster, dt, speedMultiplier * 0.7, injuredAlly.position);
+          return;
+        }
+      }
+    }
+
     if (distToPlayer < monster.detectRange) {
-      const injuredAlly = this.findInjuredAlly(monster);
-      if (injuredAlly && (distToPlayer < (monster.skills.find(s => s.type === 'heal')?.range || 120))) {
-        monster.state = 'heal';
-        this.tryUseMonsterSkill(monster, 'heal');
+      const idealMin = 90;
+      const idealMax = monster.attackRange * 0.8;
+
+      if (distToPlayer < idealMin) {
+        this.tryChangeState(monster, 'flee', 700, 300);
+        this.moveMonsterAwayFromPlayer(monster, dt, speedMultiplier * 0.7);
+        return;
       }
 
-      if (distToPlayer > monster.attackRange) {
-        monster.state = 'chase';
+      if (distToPlayer > idealMax) {
+        this.tryChangeState(monster, 'chase', 800, 300);
         this.moveMonsterTowardPlayer(monster, dt, speedMultiplier * 0.6);
-      } else {
-        monster.state = 'attack';
+        return;
+      }
+
+      if (this.tryChangeState(monster, 'attack', 500, 250)) {
         this.tryUseMonsterSkill(monster, 'projectile');
       }
     } else {
-      monster.state = 'idle';
+      this.tryChangeState(monster, 'idle', 1000, 400);
     }
   }
 
@@ -459,14 +541,15 @@ export class GameEngine {
       const isEnraged = hpPercent < 0.3;
 
       if (distToPlayer > monster.attackRange) {
-        monster.state = 'chase';
+        this.tryChangeState(monster, 'chase', 400, 100);
         const speed = isEnraged ? monster.speed * 1.5 : monster.speed;
         this.moveMonsterTowardPlayer(monster, dt, speedMultiplier * (speed / monster.speed));
       } else {
-        monster.state = 'attack';
-        if (distToPlayer < 40 && this.state.player.invincible <= 0 && monster.currentAttackCooldown <= 0) {
-          this.damagePlayer(monster.damage * (isEnraged ? 1.5 : 1));
-          monster.currentAttackCooldown = monster.attackCooldown * (isEnraged ? 0.6 : 1);
+        if (this.tryChangeState(monster, 'attack', 300, 100)) {
+          if (distToPlayer < 40 && this.state.player.invincible <= 0 && monster.currentAttackCooldown <= 0) {
+            this.damagePlayer(monster.damage * (isEnraged ? 1.5 : 1));
+            monster.currentAttackCooldown = monster.attackCooldown * (isEnraged ? 0.6 : 1);
+          }
         }
       }
 
@@ -477,15 +560,18 @@ export class GameEngine {
         }
       }
     } else {
-      monster.state = 'idle';
+      this.tryChangeState(monster, 'idle', 1000, 300);
     }
   }
 
   private moveMonsterTowardPlayer(monster: Monster, dt: number, speedMultiplier: number) {
-    const player = this.state.player;
+    this.moveMonsterTowardTarget(monster, dt, speedMultiplier, this.state.player.position);
+  }
+
+  private moveMonsterTowardTarget(monster: Monster, dt: number, speedMultiplier: number, target: Position) {
     const dir = normalize({
-      x: player.position.x - monster.position.x,
-      y: player.position.y - monster.position.y,
+      x: target.x - monster.position.x,
+      y: target.y - monster.position.y,
     });
 
     const newX = monster.position.x + dir.x * monster.speed * speedMultiplier * dt;
@@ -587,7 +673,7 @@ export class GameEngine {
       case 'summon': {
         const summonType = skill.summonType || 'skeleton';
         const count = skill.summonCount || 2;
-        const currentSummons = this.state.monsters.filter(m => m.hp > 0 && !m.isBoss).length;
+        const currentSummons = this.countOwnSummons(monster);
         const maxAllowed = monster.maxSummons || 4;
         if (currentSummons >= maxAllowed) return;
 
@@ -598,8 +684,9 @@ export class GameEngine {
           const spawnY = monster.position.y + Math.sin(angle) * 40;
           if (this.state.dungeon && isWalkable(this.state.dungeon, spawnX, spawnY)) {
             const summon = createMonster(summonType, { x: spawnX, y: spawnY }, 0.6);
+            summon.ownerId = monster.id;
+            summon.detectRange = Math.max(summon.detectRange, 120);
             this.state.monsters.push(summon);
-            monster.summonCount++;
             for (let j = 0; j < 8; j++) {
               this.addParticle(spawnX, spawnY, '#6c5ce7', 'magic');
             }
@@ -610,7 +697,9 @@ export class GameEngine {
 
       case 'heal': {
         const healPercent = skill.healPercent || 0.3;
-        const target = this.findInjuredAlly(monster) || (monster.hp < monster.maxHp ? monster : null);
+        const healRange = skill.range || 120;
+        const target = this.findInjuredAlly(monster, healRange) ||
+          ((monster.hp < monster.maxHp) ? monster : null);
         if (!target) return;
         const healAmount = Math.floor(target.maxHp * healPercent);
         const oldHp = target.hp;
@@ -636,11 +725,13 @@ export class GameEngine {
     }
   }
 
-  private findInjuredAlly(monster: Monster): Monster | null {
+  private findInjuredAlly(monster: Monster, healRange: number = 120): Monster | null {
     let mostInjured: Monster | null = null;
     let lowestPercent = 1;
     for (const ally of this.state.monsters) {
       if (ally.hp <= 0 || ally.id === monster.id) continue;
+      const dist = distance(monster.position, ally.position);
+      if (dist > healRange) continue;
       const percent = ally.hp / ally.maxHp;
       if (percent < 0.8 && percent < lowestPercent) {
         lowestPercent = percent;
@@ -648,6 +739,12 @@ export class GameEngine {
       }
     }
     return mostInjured;
+  }
+
+  private countOwnSummons(monster: Monster): number {
+    return this.state.monsters.filter(
+      m => m.hp > 0 && m.ownerId === monster.id
+    ).length;
   }
 
   private getMonsterSkillColor(skill: MonsterSkill): string {

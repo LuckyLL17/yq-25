@@ -339,6 +339,8 @@ export interface Monster {
   summonCount: number;
   maxSummons: number;
   fleeThreshold: number;
+  ownerId?: string;
+  stateCooldown: number;
 }
 
 export type ChestType = 'normal' | 'rare' | 'epic';
