@@ -478,6 +478,35 @@ export interface Badge {
   requirement: string;
 }
 
+export type GameAction = 
+  | 'move_up' 
+  | 'move_down' 
+  | 'move_left' 
+  | 'move_right' 
+  | 'interact'
+  | 'skill_1' 
+  | 'skill_2' 
+  | 'skill_3' 
+  | 'skill_4'
+  | 'pause'
+  | 'minimap'
+  | 'minimap_zoom';
+
+export interface KeyBinding {
+  action: GameAction;
+  key: string;
+  label: string;
+}
+
+export interface GameSettings {
+  keyBindings: Record<GameAction, string>;
+  screenScale: number;
+  bgmVolume: number;
+  sfxVolume: number;
+  bgmEnabled: boolean;
+  sfxEnabled: boolean;
+}
+
 export interface ChallengeGameState {
   isChallengeMode: boolean;
   challenge: DailyChallenge | null;

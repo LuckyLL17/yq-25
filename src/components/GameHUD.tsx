@@ -1,6 +1,6 @@
 import { getGameEngine } from '../game/GameEngine';
 import { useGameStore } from '../store/gameStore';
-import { Heart, Skull, Swords, Map, Clock, Target, Package, Star, FlaskConical, Shield, Sword, Wind, PawPrint } from 'lucide-react';
+import { Heart, Skull, Swords, Map, Clock, Target, Package, Star, FlaskConical, Shield, Sword, Wind, PawPrint, Settings } from 'lucide-react';
 import { SKILLS } from '../data/runes';
 import type { RuneElement, Potion } from '../types/game';
 import { formatTime } from '../data/challenges';
@@ -40,6 +40,8 @@ const GameHUD = () => {
     potionCooldowns,
     pet,
     setShowPotionPanel,
+    setShowSettings,
+    setIsPaused,
   } = useGameStore();
   const engine = getGameEngine();
   
@@ -82,6 +84,18 @@ const GameHUD = () => {
         </div>
         
         <div className="flex flex-col gap-2 items-end">
+          <button
+            onClick={() => {
+              engine.togglePause();
+              setIsPaused(true);
+              setShowSettings(true);
+            }}
+            className="pointer-events-auto bg-gray-900/90 border-4 border-gray-600 hover:border-yellow-400 p-2 rounded-lg transition-all hover:scale-110"
+            title="设置 (ESC)"
+          >
+            <Settings className="w-5 h-5 text-gray-300 hover:text-yellow-400" />
+          </button>
+          
           {isChallengeMode && challenge && (
             <div className={`bg-gray-900/90 border-4 px-4 py-2 rounded-lg flex items-center gap-3 ${
               isLowTime ? 'border-red-500 animate-pulse' : 'border-yellow-500'

@@ -1,6 +1,33 @@
-import type { SaveData, ChallengeRecord, Potion, PotionMaterial } from '../../types/game';
+import type { SaveData, ChallengeRecord, Potion, PotionMaterial, GameSettings, GameAction } from '../../types/game';
 
 const SAVE_KEY = 'rune_fox_save';
+const SETTINGS_KEY = 'rune_fox_settings';
+
+export const DEFAULT_KEY_BINDINGS: Record<GameAction, { key: string; label: string }> = {
+  move_up: { key: 'w', label: '向上移动' },
+  move_down: { key: 's', label: '向下移动' },
+  move_left: { key: 'a', label: '向左移动' },
+  move_right: { key: 'd', label: '向右移动' },
+  interact: { key: ' ', label: '互动' },
+  skill_1: { key: '1', label: '技能 1' },
+  skill_2: { key: '2', label: '技能 2' },
+  skill_3: { key: '3', label: '技能 3' },
+  skill_4: { key: '4', label: '技能 4' },
+  pause: { key: 'Escape', label: '暂停' },
+  minimap: { key: 'm', label: '小地图' },
+  minimap_zoom: { key: 'n', label: '小地图缩放' },
+};
+
+export const defaultSettings: GameSettings = {
+  keyBindings: Object.fromEntries(
+    Object.entries(DEFAULT_KEY_BINDINGS).map(([action, { key }]) => [action, key])
+  ) as Record<GameAction, string>,
+  screenScale: 1,
+  bgmVolume: 0.5,
+  sfxVolume: 0.7,
+  bgmEnabled: true,
+  sfxEnabled: true,
+};
 
 const defaultSaveData: SaveData = {
   highestLevel: 0,
@@ -343,4 +370,52 @@ export const removeMaterialFromInventory = (materialId: string, count: number = 
 export const getMaterialCount = (materialId: string): number => {
   const data = loadSaveData();
   return (data.materialInventory || []).filter(m => m.id === materialId).length;
+};
+
+export const loadSettings = (): GameSettings => {
+  try {
+    const data = localStorage.getItem(SETTINGS_KEY);
+    if (data) {
+      const parsed = JSON.parse(data);
+      return {
+        ...defaultSettings,
+        ...parsed,
+        keyBindings: { ...defaultSettings.keyBindings, ...(parsed.keyBindings || {}) },
+      };
+    }
+  } catch (e) {
+    console.error('Failed to load settings:', e);
+  }
+  return { ...defaultSettings };
+};
+
+export const saveSettings = (settings: GameSettings) => {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch (e) {
+    console.error('Failed to save settings:', e);
+  }
+};
+
+export const updateSettings = (updates: Partial<GameSettings>): GameSettings => {
+  const current = loadSettings();
+  const updated = { ...current, ...updates };
+  if (updates.keyBindings) {
+    updated.keyBindings = { ...current.keyBindings, ...updates.keyBindings };
+  }
+  saveSettings(updated);
+  return updated;
+};
+
+export const updateKeyBinding = (action: GameAction, key: string): GameSettings => {
+  const settings = loadSettings();
+  settings.keyBindings[action] = key;
+  saveSettings(settings);
+  return settings;
+};
+
+export const resetKeyBindings = (): GameSettings => {
+  const settings = { ...loadSettings(), keyBindings: { ...defaultSettings.keyBindings } };
+  saveSettings(settings);
+  return settings;
 };

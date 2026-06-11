@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { GameScene, Rune, Skill, Player, Monster, Chest, SaveData, DailyChallenge, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, Pet, ClassType } from '../types/game';
-import { loadSaveData, unlockTalent as saveUnlockTalent, saveEquipment, savePotions } from '../game/utils/storage';
+import type { GameScene, Rune, Skill, Player, Monster, Chest, SaveData, DailyChallenge, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, Pet, ClassType, GameSettings } from '../types/game';
+import { loadSaveData, unlockTalent as saveUnlockTalent, saveEquipment, savePotions, loadSettings } from '../game/utils/storage';
 import { getTalentCost, canUnlockTalent } from '../data/talents';
 import { upgradeEquipment as upgradeEquip, getUpgradeCost, getEquipmentTemplate, generateShopEquipment, getBuyPrice, getSellPrice } from '../data/equipment';
 import { createPotion, getPotionTemplate } from '../data/potions';
@@ -84,6 +84,9 @@ interface GameStore {
   pet: Pet | null;
   showMiniMap: boolean;
   miniMapZoomed: boolean;
+  showSettings: boolean;
+  isPaused: boolean;
+  settings: GameSettings;
   
   setScene: (scene: GameScene) => void;
   setPlayer: (player: Player) => void;
@@ -129,6 +132,9 @@ interface GameStore {
   toggleMiniMap: () => void;
   setMiniMapZoomed: (zoomed: boolean) => void;
   toggleMiniMapZoom: () => void;
+  setShowSettings: (show: boolean) => void;
+  setIsPaused: (paused: boolean) => void;
+  updateSettings: (settings: GameSettings) => void;
 }
 
 export const useGameStore = create<GameStore>((set, get) => {
@@ -183,6 +189,9 @@ export const useGameStore = create<GameStore>((set, get) => {
   pet: null,
   showMiniMap: true,
   miniMapZoomed: false,
+  showSettings: false,
+  isPaused: false,
+  settings: loadSettings(),
   
   setScene: (scene) => set({ scene }),
   setPlayer: (player) => set({ player }),
@@ -211,6 +220,9 @@ export const useGameStore = create<GameStore>((set, get) => {
   toggleMiniMap: () => set((state) => ({ showMiniMap: !state.showMiniMap })),
   setMiniMapZoomed: (miniMapZoomed) => set({ miniMapZoomed }),
   toggleMiniMapZoom: () => set((state) => ({ miniMapZoomed: !state.miniMapZoomed })),
+  setShowSettings: (showSettings) => set({ showSettings }),
+  setIsPaused: (isPaused) => set({ isPaused }),
+  updateSettings: (settings) => set({ settings }),
   setDraggedRune: (draggedRune) => set({ draggedRune }),
   
   addToast: (toast) => {

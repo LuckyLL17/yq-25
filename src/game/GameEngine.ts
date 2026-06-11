@@ -1,4 +1,4 @@
-import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, ShopItem, ClassType, PlayerClass } from '../types/game';
+import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, ShopItem, ClassType, PlayerClass, GameAction } from '../types/game';
 import { GAME_CONFIG } from '../data/config';
 import { generateDungeon, generateMonsters, generateChests, getPlayerStartPosition, updateFOV, isWalkable } from './utils/dungeon';
 import { getRandomRunes, createSkill, ALL_RUNES, SKILLS, getRuneById } from '../data/runes';
@@ -7,9 +7,10 @@ import { getClassById, getClassStartingRunes } from '../data/classes';
 import { generateId, distance, clamp, normalize } from './utils/math';
 import { drawFox, drawMonster, drawChest, drawStairs, drawRuneIcon, drawPet, getElementColor, getElementGlowColor, drawShopkeeper } from './utils/pixel';
 import { createPet, PET_SKILLS } from '../data/pets';
-import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, getChallengeRecord, unlockBadge, getStreakDays, getPetSkill, discoverEquipment, saveEquipment, savePotions, discoverPotion, discoverMaterial } from './utils/storage';
+import { updateSaveData, discoverRune, discoverSkill, addTalentPoints, loadSaveData, saveChallengeRecord, getChallengeRecord, unlockBadge, getStreakDays, getPetSkill, discoverEquipment, saveEquipment, savePotions, discoverPotion, discoverMaterial, loadSettings, DEFAULT_KEY_BINDINGS } from './utils/storage';
 import { getRandomEquipment, getEquipmentTemplate } from '../data/equipment';
 import { getRandomPotion, getRandomMaterial, createPotion, getPotionTemplate, getRecipeByPotionId } from '../data/potions';
+import { getAudioManager } from './AudioManager';
 
 export class GameEngine {
   private canvas: HTMLCanvasElement | null = null;
@@ -18,12 +19,26 @@ export class GameEngine {
   private lastTime: number = 0;
   private keys: Set<string> = new Set();
   private isRunning: boolean = false;
+  private isPaused: boolean = false;
   private hpRegenTimer: number = 0;
   
   public state: GameState;
   public onStateChange: (() => void) | null = null;
   public onChestOpened: ((rewards: { runes: Rune[]; equipment?: Equipment[]; potions: Potion[]; materials: PotionMaterial[] }) => void) | null = null;
   public onShopOpen: ((shop: Shop) => void) | null = null;
+  public onPauseChange: ((paused: boolean) => void) | null = null;
+  
+  private getKeyForAction(action: GameAction): string {
+    const settings = loadSettings();
+    return settings.keyBindings[action] || DEFAULT_KEY_BINDINGS[action].key;
+  }
+  
+  private isActionPressed(action: GameAction): boolean {
+    const boundKey = this.getKeyForAction(action);
+    if (this.keys.has(boundKey.toLowerCase())) return true;
+    if (this.keys.has(boundKey)) return true;
+    return false;
+  }
   
   constructor() {
     this.state = this.createInitialState();
@@ -127,7 +142,7 @@ export class GameEngine {
     const deltaTime = Math.min(currentTime - this.lastTime, 50);
     this.lastTime = currentTime;
     
-    if (this.state.scene === 'playing') {
+    if (this.state.scene === 'playing' && !this.isPaused) {
       this.update(deltaTime);
     }
     
@@ -167,10 +182,10 @@ export class GameEngine {
     let dx = 0;
     let dy = 0;
     
-    if (this.keys.has('w') || this.keys.has('arrowup')) dy -= 1;
-    if (this.keys.has('s') || this.keys.has('arrowdown')) dy += 1;
-    if (this.keys.has('a') || this.keys.has('arrowleft')) { dx -= 1; player.direction = -1; }
-    if (this.keys.has('d') || this.keys.has('arrowright')) { dx += 1; player.direction = 1; }
+    if (this.isActionPressed('move_up') || this.keys.has('arrowup')) dy -= 1;
+    if (this.isActionPressed('move_down') || this.keys.has('arrowdown')) dy += 1;
+    if (this.isActionPressed('move_left') || this.keys.has('arrowleft')) { dx -= 1; player.direction = -1; }
+    if (this.isActionPressed('move_right') || this.keys.has('arrowright')) { dx += 1; player.direction = 1; }
     
     if (dx !== 0 || dy !== 0) {
       const normalized = normalize({ x: dx, y: dy });
@@ -966,7 +981,7 @@ export class GameEngine {
       if (chest.opened) continue;
       
       const dist = distance(player.position, chest.position);
-      if (dist < 30 && this.keys.has(' ')) {
+      if (dist < 30 && this.isActionPressed('interact')) {
         this.openChest(chest);
       }
     }
@@ -979,8 +994,9 @@ export class GameEngine {
     const shop = this.state.dungeon.shop;
     
     const dist = distance(player.position, shop.position);
-    if (dist < 40 && this.keys.has(' ')) {
-      this.keys.delete(' ');
+    if (dist < 40 && this.isActionPressed('interact')) {
+      const interactKey = this.getKeyForAction('interact');
+      this.keys.delete(interactKey.toLowerCase());
       if (this.onShopOpen) {
         this.onShopOpen(shop);
       }
@@ -996,7 +1012,7 @@ export class GameEngine {
     const stairsPixelY = stairs.y * GAME_CONFIG.TILE_SIZE + GAME_CONFIG.TILE_SIZE / 2;
     
     const dist = distance(player.position, { x: stairsPixelX, y: stairsPixelY });
-    if (dist < 25 && this.keys.has(' ')) {
+    if (dist < 25 && this.isActionPressed('interact')) {
       this.nextLevel();
     }
   }
@@ -1100,6 +1116,8 @@ export class GameEngine {
       );
     }
     
+    getAudioManager().playSFX('chest');
+    
     if (this.onChestOpened) {
       this.onChestOpened({ runes: rewardRunes, equipment: rewardEquipment, potions: rewardPotions, materials: rewardMaterials });
     }
@@ -1137,6 +1155,7 @@ export class GameEngine {
     
     updateSaveData({ highestLevel: Math.max(this.state.currentLevel, (window as any).highestLevel || 0) });
     
+    getAudioManager().playSFX('stairs');
     this.notifyStateChange();
   }
   
@@ -1238,6 +1257,7 @@ export class GameEngine {
     this.updateSkillsFromRunes();
     initialRunes.forEach(r => discoverRune(r.id));
     
+    getAudioManager().startBGM();
     this.notifyStateChange();
   }
   
@@ -1298,6 +1318,8 @@ export class GameEngine {
   
   private gameOver() {
     this.state.scene = 'gameover';
+    getAudioManager().playSFX('death');
+    getAudioManager().stopBGM();
     
     if (this.state.isChallengeMode && !this.state.challengeCompleted) {
       this.failChallenge();
@@ -1467,6 +1489,8 @@ export class GameEngine {
     this.state.scene = 'menu';
     this.state.isChallengeMode = false;
     this.state.challenge = null;
+    this.isPaused = false;
+    getAudioManager().stopBGM();
     this.notifyStateChange();
   }
   
@@ -1536,6 +1560,7 @@ export class GameEngine {
       shieldTimer: 0,
       damageBoostTimer: 0,
       damageBoostPercent: 0,
+      classType: null,
     };
     
     const challengeSaveData = loadSaveData();
@@ -1547,6 +1572,7 @@ export class GameEngine {
     this.updateSkillsFromRunes();
     challengeRunes.forEach(r => discoverRune(r.id));
     
+    getAudioManager().startBGM();
     this.notifyStateChange();
   }
   
@@ -1561,6 +1587,8 @@ export class GameEngine {
     const player = this.state.player;
     const targetX = player.position.x + player.direction * 50;
     const targetY = player.position.y;
+    
+    getAudioManager().playSFX('skill');
     
     if (skill.effect === 'spread') {
       this.castAreaSkill(skill);
@@ -1965,6 +1993,7 @@ export class GameEngine {
     
     const color = getElementColor(element as any);
     this.addDamageNumber(monster.position, finalDamage, color, actuallyCrit);
+    getAudioManager().playSFX('hit');
     
     if (element === 'fire') {
       if (!monster.statusEffects.find(s => s.type === 'burn')) {
@@ -2088,6 +2117,7 @@ export class GameEngine {
     }
     
     this.addDamageNumber(this.state.player.position, finalDamage, '#ff4757', false);
+    getAudioManager().playSFX('damage');
     
     this.consumeEquipmentDurability(1);
     
@@ -2136,15 +2166,48 @@ export class GameEngine {
     this.keys.add(key.toLowerCase());
     
     if (this.state.scene === 'playing') {
-      if (key === '1') this.useSkill(0);
-      if (key === '2') this.useSkill(1);
-      if (key === '3') this.useSkill(2);
-      if (key === '4') this.useSkill(3);
+      if (this.isActionPressed('skill_1')) this.useSkill(0);
+      if (this.isActionPressed('skill_2')) this.useSkill(1);
+      if (this.isActionPressed('skill_3')) this.useSkill(2);
+      if (this.isActionPressed('skill_4')) this.useSkill(3);
     }
   }
   
   public handleKeyUp(key: string) {
     this.keys.delete(key.toLowerCase());
+  }
+  
+  public togglePause(): boolean {
+    this.isPaused = !this.isPaused;
+    if (this.onPauseChange) {
+      this.onPauseChange(this.isPaused);
+    }
+    const audio = getAudioManager();
+    if (this.isPaused) {
+      audio.pauseBGM();
+    } else {
+      audio.resumeBGM();
+    }
+    return this.isPaused;
+  }
+  
+  public getPaused(): boolean {
+    return this.isPaused;
+  }
+  
+  public setPaused(paused: boolean) {
+    this.isPaused = paused;
+    if (this.onPauseChange) {
+      this.onPauseChange(this.isPaused);
+    }
+  }
+  
+  public resetGame() {
+    this.isPaused = false;
+    this.keys.clear();
+    this.hpRegenTimer = 0;
+    this.state = this.createInitialState();
+    this.notifyStateChange();
   }
   
   public setCombineSlot(slot: 1 | 2, rune: Rune | null) {
@@ -2204,6 +2267,20 @@ export class GameEngine {
     
     if (this.state.scene === 'playing' || this.state.scene === 'gameover') {
       this.renderGame();
+    }
+    
+    if (this.isPaused && this.state.scene === 'playing') {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 48px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('暂停', this.canvas.width / 2, this.canvas.height / 2 - 20);
+      
+      ctx.font = '16px monospace';
+      ctx.fillStyle = '#aaaaaa';
+      ctx.fillText('按 ESC 继续游戏', this.canvas.width / 2, this.canvas.height / 2 + 20);
     }
   }
   
