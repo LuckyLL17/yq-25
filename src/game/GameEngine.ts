@@ -81,6 +81,16 @@ export class GameEngine {
         damageBoostPercent: 0,
         classType: null,
         statusEffects: [],
+        isAttacking: false,
+        attackAnimTimer: 0,
+        isHurt: false,
+        hurtAnimTimer: 0,
+        isDead: false,
+        deathAnimTimer: 0,
+        isJumping: false,
+        jumpAnimTimer: 0,
+        jumpHeight: 0,
+        breathePhase: 0,
       },
       selectedClass: null,
       difficulty: 'adventurer',
@@ -198,8 +208,12 @@ export class GameEngine {
       this.updateChallenge(deltaTime);
     }
     
-    if (this.state.player.hp <= 0) {
-      this.gameOver();
+    if (this.state.player.hp <= 0 && !this.state.player.isDead) {
+      this.state.player.isDead = true;
+      this.state.player.deathAnimTimer = 0;
+      setTimeout(() => {
+        this.gameOver();
+      }, 1500);
     }
   }
   
@@ -244,6 +258,40 @@ export class GameEngine {
     } else {
       player.isMoving = false;
       player.animFrame = 0;
+      player.breathePhase += deltaTime / 500;
+    }
+    
+    if (player.isAttacking) {
+      player.attackAnimTimer -= deltaTime;
+      if (player.attackAnimTimer <= 0) {
+        player.isAttacking = false;
+        player.attackAnimTimer = 0;
+      }
+    }
+    
+    if (player.isHurt) {
+      player.hurtAnimTimer -= deltaTime;
+      if (player.hurtAnimTimer <= 0) {
+        player.isHurt = false;
+        player.hurtAnimTimer = 0;
+      }
+    }
+    
+    if (player.isDead) {
+      player.deathAnimTimer += deltaTime;
+    }
+    
+    if (player.isJumping) {
+      player.jumpAnimTimer += deltaTime;
+      const jumpDuration = 500;
+      const progress = player.jumpAnimTimer / jumpDuration;
+      if (progress >= 1) {
+        player.isJumping = false;
+        player.jumpAnimTimer = 0;
+        player.jumpHeight = 0;
+      } else {
+        player.jumpHeight = Math.sin(progress * Math.PI) * 20;
+      }
     }
     
     if (player.invincible > 0) {
@@ -2045,6 +2093,16 @@ export class GameEngine {
       damageBoostPercent: 0,
       classType: classId,
       statusEffects: [],
+      isAttacking: false,
+      attackAnimTimer: 0,
+      isHurt: false,
+      hurtAnimTimer: 0,
+      isDead: false,
+      deathAnimTimer: 0,
+      isJumping: false,
+      jumpAnimTimer: 0,
+      jumpHeight: 0,
+      breathePhase: 0,
     };
     
     const selectedPetType = saveData.selectedPet || 'fire_dragonling';
@@ -2374,6 +2432,16 @@ export class GameEngine {
       damageBoostPercent: 0,
       classType: null,
       statusEffects: [],
+      isAttacking: false,
+      attackAnimTimer: 0,
+      isHurt: false,
+      hurtAnimTimer: 0,
+      isDead: false,
+      deathAnimTimer: 0,
+      isJumping: false,
+      jumpAnimTimer: 0,
+      jumpHeight: 0,
+      breathePhase: 0,
     };
     
     const challengeSaveData = loadSaveData();
@@ -2426,6 +2494,8 @@ export class GameEngine {
     skill.currentCooldown = skill.cooldown;
 
     const player = this.state.player;
+    player.isAttacking = true;
+    player.attackAnimTimer = 250;
 
     getAudioManager().playSFX('skill');
 
@@ -3271,6 +3341,8 @@ export class GameEngine {
     
     this.state.player.hp -= finalDamage;
     this.state.player.invincible = GAME_CONFIG.INVINCIBLE_DURATION;
+    this.state.player.isHurt = true;
+    this.state.player.hurtAnimTimer = 400;
     
     if (this.state.isChallengeMode) {
       this.state.challengeDamageTaken += finalDamage;
@@ -3816,7 +3888,24 @@ export class GameEngine {
     const playerScreenY = player.position.y - cam.y;
     
     if (player.invincible <= 0 || Math.floor(player.invincible / 50) % 2 === 0) {
-      drawFox(ctx, playerScreenX, playerScreenY, player.direction, player.animFrame, 2);
+      drawFox(
+        ctx,
+        playerScreenX,
+        playerScreenY,
+        player.direction,
+        player.animFrame,
+        2,
+        player.isMoving,
+        player.isAttacking,
+        player.attackAnimTimer,
+        player.isHurt,
+        player.hurtAnimTimer,
+        player.isDead,
+        player.deathAnimTimer,
+        player.isJumping,
+        player.jumpHeight,
+        player.breathePhase
+      );
     }
 
     const playerBuffs: { color: string; remaining: number; duration: number; stacks: number; type: string; category: string }[] = [];

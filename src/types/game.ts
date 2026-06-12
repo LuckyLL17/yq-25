@@ -568,6 +568,16 @@ export interface Player {
   damageBoostPercent: number;
   classType: ClassType | null;
   statusEffects: StatusEffect[];
+  isAttacking: boolean;
+  attackAnimTimer: number;
+  isHurt: boolean;
+  hurtAnimTimer: number;
+  isDead: boolean;
+  deathAnimTimer: number;
+  isJumping: boolean;
+  jumpAnimTimer: number;
+  jumpHeight: number;
+  breathePhase: number;
 }
 
 export interface GameState {

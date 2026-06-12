@@ -57,55 +57,189 @@ export const drawFox = (
   y: number,
   direction: number,
   animFrame: number,
-  scale: number = 2
+  scale: number = 2,
+  isMoving: boolean = false,
+  isAttacking: boolean = false,
+  attackAnimTimer: number = 0,
+  isHurt: boolean = false,
+  hurtAnimTimer: number = 0,
+  isDead: boolean = false,
+  deathAnimTimer: number = 0,
+  isJumping: boolean = false,
+  jumpHeight: number = 0,
+  breathePhase: number = 0
 ) => {
   const s = scale;
   const px = Math.floor(x - 8 * s);
-  const py = Math.floor(y - 8 * s);
-  
-  const offsetY = animFrame % 2 === 0 ? 0 : -s;
-  
+  let py = Math.floor(y - 8 * s);
+
+  if (isDead) {
+    const deathProgress = Math.min(1, deathAnimTimer / 1500);
+    const rotation = deathProgress * Math.PI * 0.5;
+    const fallY = deathProgress * 8 * s;
+    const alpha = 1 - deathProgress * 0.3;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(px + 8 * s, py + 8 * s + fallY);
+    ctx.rotate(rotation * (direction > 0 ? 1 : -1));
+    ctx.translate(-8 * s, -8 * s);
+
+    drawFoxBody(ctx, 0, 0, s, direction, 0, false, 0, false, 0, breathePhase);
+
+    ctx.restore();
+    return;
+  }
+
+  py -= jumpHeight;
+
+  const hurtShake = isHurt ? Math.sin(hurtAnimTimer / 30) * 2 * s : 0;
+
+  ctx.save();
+  ctx.translate(hurtShake, 0);
+
+  if (isHurt && Math.floor(hurtAnimTimer / 80) % 2 === 0) {
+    ctx.globalCompositeOperation = 'source-atop';
+  }
+
+  const attackProgress = isAttacking ? 1 - attackAnimTimer / 250 : 0;
+  const attackSquash = isAttacking ? Math.sin(attackProgress * Math.PI) * 0.15 : 0;
+
+  ctx.save();
+  ctx.translate(px + 8 * s, py + 8 * s);
+  ctx.scale(1 + attackSquash, 1 - attackSquash * 0.5);
+  ctx.translate(-8 * s, -8 * s);
+
+  drawFoxBody(ctx, 0, 0, s, direction, animFrame, isMoving, jumpHeight, isAttacking, attackProgress, breathePhase);
+
+  ctx.restore();
+
+  if (isHurt && Math.floor(hurtAnimTimer / 80) % 2 === 0) {
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  ctx.restore();
+};
+
+const drawFoxBody = (
+  ctx: CanvasRenderingContext2D,
+  offsetX: number,
+  offsetY: number,
+  s: number,
+  direction: number,
+  animFrame: number,
+  isMoving: boolean,
+  jumpHeight: number,
+  isAttacking: boolean,
+  attackProgress: number,
+  breathePhase: number
+) => {
+  const px = offsetX;
+  const py = offsetY;
+
+  const breatheOffset = Math.sin(breathePhase) * 0.5 * s;
+  const breatheScale = 1 + Math.sin(breathePhase) * 0.03;
+
+  const baseOffsetY = isMoving ? (animFrame % 2 === 0 ? 0 : -s) : breatheOffset;
+
+  const bodyOffsetY = baseOffsetY;
+  const bodyScaleY = isMoving ? 1 : breatheScale;
+
+  ctx.save();
+  ctx.translate(px + 8 * s, py + 10 * s + bodyOffsetY);
+  ctx.scale(1, bodyScaleY);
+  ctx.translate(-8 * s, -10 * s - bodyOffsetY);
+
   ctx.fillStyle = '#ff8c42';
-  ctx.fillRect(px + 4 * s, py + 6 * s + offsetY, 8 * s, 7 * s);
-  
+  ctx.fillRect(px + 4 * s, py + 6 * s + bodyOffsetY, 8 * s, 7 * s);
+
   ctx.fillStyle = '#fff5e6';
-  ctx.fillRect(px + 5 * s, py + 9 * s + offsetY, 6 * s, 4 * s);
-  
+  ctx.fillRect(px + 5 * s, py + 9 * s + bodyOffsetY, 6 * s, 4 * s);
+
+  ctx.restore();
+
+  const headOffsetY = baseOffsetY - breatheOffset * 0.5;
+  const headBob = isMoving ? (animFrame % 2 === 0 ? 0 : -0.5 * s) : 0;
+
+  ctx.save();
+  ctx.translate(px + 8 * s, py + 5 * s + headOffsetY + headBob);
+  ctx.scale(1, isMoving ? 1 : breatheScale);
+  ctx.translate(-8 * s, -5 * s - headOffsetY - headBob);
+
   ctx.fillStyle = '#ff8c42';
-  ctx.fillRect(px + 3 * s, py + 2 * s + offsetY, 10 * s, 6 * s);
-  
+  ctx.fillRect(px + 3 * s, py + 2 * s + headOffsetY + headBob, 10 * s, 6 * s);
+
   ctx.fillStyle = '#fff5e6';
-  ctx.fillRect(px + 5 * s, py + 5 * s + offsetY, 6 * s, 3 * s);
-  
+  ctx.fillRect(px + 5 * s, py + 5 * s + headOffsetY + headBob, 6 * s, 3 * s);
+
   ctx.fillStyle = '#ff6b35';
-  ctx.fillRect(px + 3 * s, py + 1 * s + offsetY, 2 * s, 3 * s);
-  ctx.fillRect(px + 11 * s, py + 1 * s + offsetY, 2 * s, 3 * s);
-  
+  ctx.fillRect(px + 3 * s, py + 1 * s + headOffsetY + headBob, 2 * s, 3 * s);
+  ctx.fillRect(px + 11 * s, py + 1 * s + headOffsetY + headBob, 2 * s, 3 * s);
+
   const eyeX = direction < 0 ? px + 4 * s : px + 10 * s;
   ctx.fillStyle = '#2d3436';
-  ctx.fillRect(eyeX, py + 4 * s + offsetY, s, s);
-  
+
+  if (isAttacking) {
+    const eyeNarrow = Math.sin(attackProgress * Math.PI) * 0.5;
+    ctx.fillRect(eyeX, py + 4 * s + headOffsetY + headBob + s * eyeNarrow, s, s - s * eyeNarrow);
+  } else {
+    ctx.fillRect(eyeX, py + 4 * s + headOffsetY + headBob, s, s);
+    ctx.fillStyle = '#ffffff';
+    const shineX = direction < 0 ? eyeX : eyeX;
+    ctx.fillRect(shineX, py + 4 * s + headOffsetY + headBob, s * 0.5, s * 0.5);
+  }
+
   ctx.fillStyle = '#2d3436';
-  ctx.fillRect(px + 7 * s, py + 6 * s + offsetY, 2 * s, s);
-  
+  ctx.fillRect(px + 7 * s, py + 6 * s + headOffsetY + headBob, 2 * s, s);
+
+  ctx.restore();
+
+  const tailWag = isMoving ? Math.sin(animFrame * Math.PI / 2) * s : Math.sin(breathePhase * 2) * 0.5 * s;
   const tailDir = direction < 0 ? 1 : -1;
   ctx.fillStyle = '#ff8c42';
-  ctx.fillRect(px + (direction < 0 ? 12 : 1) * s, py + 7 * s + offsetY, 3 * s, 4 * s);
+  const tailBaseX = direction < 0 ? px + 12 * s : px + 1 * s;
+  ctx.fillRect(tailBaseX, py + 7 * s + bodyOffsetY + tailWag, 3 * s, 4 * s);
   ctx.fillStyle = '#fff5e6';
-  ctx.fillRect(px + (direction < 0 ? 13 : 1) * s, py + 9 * s + offsetY, 2 * s, 2 * s);
-  
+  ctx.fillRect(direction < 0 ? px + 13 * s : px + 1 * s, py + 9 * s + bodyOffsetY + tailWag, 2 * s, 2 * s);
+
   ctx.fillStyle = '#6c5ce7';
-  ctx.fillRect(px + 4 * s, py + 0 * s + offsetY, 8 * s, 2 * s);
-  ctx.fillRect(px + 5 * s, py - 1 * s + offsetY, 6 * s, s);
-  ctx.fillRect(px + 7 * s, py - 2 * s + offsetY, 2 * s, s);
-  
+  ctx.fillRect(px + 4 * s, py + 0 * s + headOffsetY + headBob, 8 * s, 2 * s);
+  ctx.fillRect(px + 5 * s, py - 1 * s + headOffsetY + headBob, 6 * s, s);
+  ctx.fillRect(px + 7 * s, py - 2 * s + headOffsetY + headBob, 2 * s, s);
+
   ctx.fillStyle = '#ffeaa7';
-  ctx.fillRect(px + 7 * s, py - 3 * s + offsetY, 2 * s, s);
-  
+  ctx.fillRect(px + 7 * s, py - 3 * s + headOffsetY + headBob, 2 * s, s);
+
+  if (isAttacking) {
+    const attackReach = Math.sin(attackProgress * Math.PI) * 6 * s;
+    const attackX = direction > 0 ? px + 12 * s + attackReach : px + 4 * s - attackReach - 2 * s;
+    const attackY = py + 6 * s + bodyOffsetY;
+
+    ctx.fillStyle = 'rgba(255, 230, 109, 0.6)';
+    ctx.fillRect(attackX - s, attackY - s, 4 * s, 6 * s);
+
+    ctx.fillStyle = '#ffe66d';
+    ctx.fillRect(attackX, attackY, 2 * s, 4 * s);
+
+    if (attackProgress > 0.5) {
+      ctx.fillStyle = '#ff6b35';
+      ctx.fillRect(attackX + (direction > 0 ? 2 * s : -s), attackY + s, s, 2 * s);
+    }
+  }
+
+  const legOffset = isMoving ? (animFrame % 2 === 0 ? 0 : s) : 0;
+  const legStretch = jumpHeight > 0 ? -jumpHeight * 0.3 : 0;
+
   ctx.fillStyle = '#d63031';
-  const legOffset = animFrame % 2 === 0 ? 0 : s;
-  ctx.fillRect(px + 5 * s, py + 13 * s, 2 * s, 2 * s - legOffset / 2);
-  ctx.fillRect(px + 9 * s, py + 13 * s, 2 * s, 2 * s - legOffset / 2);
+  ctx.fillRect(px + 5 * s, py + 13 * s - legStretch, 2 * s, 2 * s - legOffset / 2 + legStretch);
+  ctx.fillRect(px + 9 * s, py + 13 * s - legStretch, 2 * s, 2 * s + legOffset / 2 + legStretch);
+
+  if (jumpHeight > 0) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    const shadowScale = 1 - jumpHeight / (20 * s);
+    const shadowWidth = 8 * s * Math.max(0.3, shadowScale);
+    ctx.fillRect(px + 8 * s - shadowWidth / 2, py + 15 * s + jumpHeight * 0.5, shadowWidth, 2 * s * Math.max(0.3, shadowScale));
+  }
 };
 
 export const drawMonster = (
