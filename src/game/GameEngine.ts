@@ -3548,6 +3548,57 @@ export class GameEngine {
     if (player.invincible <= 0 || Math.floor(player.invincible / 50) % 2 === 0) {
       drawFox(ctx, playerScreenX, playerScreenY, player.direction, player.animFrame, 2);
     }
+
+    const playerBuffs: { color: string; remaining: number; duration: number }[] = [];
+    if (player.shieldTimer > 0) {
+      playerBuffs.push({ color: '#54a0ff', remaining: player.shieldTimer, duration: 15000 });
+    }
+    if (player.damageBoostTimer > 0) {
+      playerBuffs.push({ color: '#ff9f43', remaining: player.damageBoostTimer, duration: this.state.potionBuffTimers['attack'] ? 15000 : 8000 });
+    }
+    if (this.state.potionBuffTimers['defense'] && this.state.potionBuffTimers['defense'] > 0) {
+      playerBuffs.push({ color: '#48dbfb', remaining: this.state.potionBuffTimers['defense'], duration: 15000 });
+    }
+    if (this.state.potionBuffTimers['speed'] && this.state.potionBuffTimers['speed'] > 0) {
+      playerBuffs.push({ color: '#a29bfe', remaining: this.state.potionBuffTimers['speed'], duration: 10000 });
+    }
+
+    const buffIconSize = 6;
+    const buffSpacing = 2;
+    const buffTotalWidth = playerBuffs.length * (buffIconSize + buffSpacing) - buffSpacing;
+    const buffStartX = playerScreenX - buffTotalWidth / 2;
+    const buffY = playerScreenY - 28;
+
+    for (let i = 0; i < playerBuffs.length; i++) {
+      const buff = playerBuffs[i];
+      const bx = buffStartX + i * (buffIconSize + buffSpacing);
+      const progress = buff.remaining / buff.duration;
+
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(bx - 1, buffY - 1, buffIconSize + 2, buffIconSize + 2);
+
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = buff.color;
+      ctx.fillRect(bx, buffY, buffIconSize, buffIconSize);
+
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(bx, buffY, buffIconSize, buffIconSize * 0.3);
+
+      ctx.globalAlpha = 1 - progress;
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(bx, buffY, buffIconSize, buffIconSize);
+
+      ctx.globalAlpha = 1;
+      const timeSeconds = Math.ceil(buff.remaining / 1000);
+      if (timeSeconds <= 3) {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 6px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(timeSeconds), bx + buffIconSize / 2, buffY + buffIconSize + 5);
+      }
+    }
     
     const pet = this.state.pet;
     if (pet && pet.hp > 0) {

@@ -321,3 +321,121 @@ canvas {
 .codex-rune-animate {
   animation: codex-rune-glow 2.5s ease-in-out infinite;
 }
+
+@keyframes combat-text-float {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-12px) scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-40px) scale(0.85);
+  }
+}
+
+.combat-text-damage {
+  animation: combat-text-float 1.2s ease-out forwards;
+  text-shadow: 0 0 6px rgba(255, 71, 87, 0.7), 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.combat-text-heal {
+  animation: combat-text-float 1.4s ease-out forwards;
+  text-shadow: 0 0 6px rgba(123, 237, 159, 0.7), 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.combat-text-crit {
+  animation: combat-text-float 1.5s ease-out forwards;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.9), 0 2px 6px rgba(0, 0, 0, 0.8);
+}
+
+@keyframes hp-loss-preview {
+  0% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.hp-loss-bar {
+  animation: hp-loss-preview 1.5s ease-out forwards;
+}
+
+@keyframes buff-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) translateY(10px);
+  }
+  60% {
+    transform: scale(1.15) translateY(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.buff-icon-enter {
+  animation: buff-enter 0.4s ease-out forwards;
+}
+
+@keyframes buff-exit {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.3) translateY(-10px);
+  }
+}
+
+.buff-icon-exit {
+  animation: buff-exit 0.3s ease-in forwards;
+}
+
+@keyframes cooldown-pulse {
+  0%, 100% {
+    box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.4);
+  }
+  50% {
+    box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.6), 0 0 6px rgba(100, 100, 200, 0.3);
+  }
+}
+
+.cooldown-active {
+  animation: cooldown-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes stat-value-change {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.stat-value-bump {
+  animation: stat-value-change 0.3s ease-out;
+}
+
+@keyframes heal-flash {
+  0% {
+    background-color: rgba(123, 237, 159, 0.4);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.heal-flash {
+  animation: heal-flash 0.5s ease-out;
+}
