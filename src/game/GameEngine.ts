@@ -127,6 +127,7 @@ export class GameEngine {
       colorFilter: null,
       playerChant: null,
       screenShake: { intensity: 0, duration: 0, maxDuration: 0 },
+      gameTime: 0,
     };
   }
   
@@ -168,6 +169,7 @@ export class GameEngine {
   };
   
   private update(deltaTime: number) {
+    this.state.gameTime += deltaTime;
     this.updatePlayer(deltaTime);
     this.updatePet(deltaTime);
     this.updateMonsters(deltaTime);
@@ -1332,8 +1334,11 @@ export class GameEngine {
   
   private updateDamageNumbers(deltaTime: number) {
     for (let i = this.state.damageNumbers.length - 1; i >= 0; i--) {
-      const dn = this.state.damageNumbers[i];
-      dn.position.y -= 30 * (deltaTime / 1000);
+      const dn = this.state.damageNumbers[i] as any;
+      const progress = 1 - dn.life / dn.maxLife;
+      
+      dn.position.y -= (dn.isCrit ? 45 : 30) * (deltaTime / 1000);
+      dn.position.x += Math.sin(progress * Math.PI * 2) * (dn.isCrit ? 8 : 3) * (deltaTime / 1000);
       dn.life -= deltaTime;
       
       if (dn.life <= 0) {
@@ -1874,6 +1879,7 @@ export class GameEngine {
     this.state.earnedTalentPoints = 0;
     this.state.equipmentInventory = saveData.equipmentInventory || [];
     this.state.equippedEquipment = this.loadEquippedEquipment(saveData);
+    this.state.gameTime = 0;
     this.state.player = {
       position: { ...startPos },
       hp: maxHp,
@@ -2201,6 +2207,7 @@ export class GameEngine {
     this.state.challengeCompleted = false;
     this.state.challengeFailed = false;
     this.state.challengeDamageTaken = 0;
+    this.state.gameTime = 0;
     this.state.player = {
       position: { ...startPos },
       hp: maxHp,
@@ -3810,13 +3817,44 @@ export class GameEngine {
       const screenX = dn.position.x - cam.x;
       const screenY = dn.position.y - cam.y;
       const alpha = dn.life / dn.maxLife;
+      const progress = 1 - alpha;
+      
+      const isHeal = dn.color === '#7bed9f';
+      
+      let scale = 1;
+      if (progress < 0.2) {
+        scale = 0.5 + (progress / 0.2) * 0.5;
+      } else if (dn.isCrit && progress < 0.5) {
+        scale = 1 + Math.sin(progress * Math.PI * 4) * 0.1;
+      }
+      
+      const fontSize = dn.isCrit ? 22 : 16;
+      const actualFontSize = fontSize * scale;
       
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = dn.color;
-      ctx.font = `${dn.isCrit ? 'bold ' : ''}16px monospace`;
       ctx.textAlign = 'center';
-      ctx.fillText(dn.value > 0 ? `-${dn.value}` : '', screenX, screenY);
+      ctx.textBaseline = 'middle';
+      
+      const text = isHeal ? `+${dn.value}` : `-${dn.value}`;
+      
+      ctx.font = `bold ${actualFontSize}px monospace`;
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillText(text, screenX + 2, screenY + 2);
+      
+      ctx.font = `${dn.isCrit ? 'bold ' : ''}${actualFontSize}px monospace`;
+      ctx.fillStyle = dn.color;
+      ctx.fillText(text, screenX, screenY);
+      
+      if (dn.isCrit) {
+        ctx.globalAlpha = alpha * 0.4;
+        ctx.font = `bold ${actualFontSize * 1.4}px monospace`;
+        ctx.fillStyle = dn.color;
+        ctx.fillText(text, screenX, screenY);
+        ctx.globalAlpha = alpha;
+      }
+      
       ctx.globalAlpha = 1;
+      ctx.textBaseline = 'alphabetic';
     }
 
     const flash = this.state.screenFlash;

@@ -543,6 +543,7 @@ export interface GameState {
   colorFilter: ColorFilter | null;
   playerChant: ChantState | null;
   screenShake: { intensity: number; duration: number; maxDuration: number };
+  gameTime: number;
 }
 
 export interface SaveData {

@@ -108,9 +108,6 @@ const GameCanvas = () => {
     transformOrigin: 'center center' as const,
   }), [scale]);
   
-  const interactKey = settings.keyBindings.interact || DEFAULT_KEY_BINDINGS.interact.key;
-  const skillKeys = [1, 2, 3, 4].map(i => settings.keyBindings[`skill_${i}` as keyof typeof settings.keyBindings] || String(i));
-  
   return (
     <div
       ref={containerRef}
@@ -128,16 +125,6 @@ const GameCanvas = () => {
       <ShopPanel />
       {scene === 'playing' && <MiniMap />}
       <SettingsMenu />
-      
-      {scene === 'playing' && !showSettings && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-          <div className="bg-gray-900/80 px-4 py-2 rounded-lg border-2 border-gray-700">
-            <p className="text-gray-400 text-xs text-center">
-              {interactKey === ' ' ? '空格键' : interactKey.toUpperCase()}互动 · {skillKeys.map(k => k.toUpperCase()).join('/')} 释放技能 · ESC 暂停设置
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

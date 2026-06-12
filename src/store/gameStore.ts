@@ -90,6 +90,7 @@ interface GameStore {
   isPaused: boolean;
   settings: GameSettings;
   difficulty: AdventureDifficulty;
+  gameTime: number;
   
   setScene: (scene: GameScene) => void;
   setSelectedClass: (classType: ClassType | null) => void;
@@ -202,6 +203,7 @@ export const useGameStore = create<GameStore>((set, get) => {
   isPaused: false,
   settings: loadSettings(),
   difficulty: 'adventurer',
+  gameTime: 0,
   
   setScene: (scene) => set({ scene }),
   setSelectedClass: (selectedClass) => set({ selectedClass }),
@@ -419,6 +421,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       potionCooldowns: state.potionCooldowns || {},
       potionBuffTimers: state.potionBuffTimers || {},
       pet: state.pet || null,
+      gameTime: state.gameTime || 0,
     });
     
     if (state.scene === 'gameover' || state.scene === 'victory') {
