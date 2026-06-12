@@ -255,6 +255,10 @@ export interface MonsterSkill {
   summonType?: MonsterType;
   summonCount?: number;
   healPercent?: number;
+  statusEffectType?: StatusEffectType;
+  statusEffectChance?: number;
+  statusEffectDuration?: number;
+  statusEffectDamage?: number;
 }
 
 export interface MonsterProjectile {
@@ -268,6 +272,10 @@ export interface MonsterProjectile {
   size: number;
   color: string;
   sourceId: string;
+  statusEffectType?: StatusEffectType;
+  statusEffectChance?: number;
+  statusEffectDuration?: number;
+  statusEffectDamage?: number;
 }
 
 export type PetType = 'fire_dragonling' | 'ice_sprite' | 'thunder_bird' | 'shadow_cat';
@@ -305,10 +313,74 @@ export interface Pet {
   followOffset: { x: number; y: number };
 }
 
+export type StatusEffectType =
+  | 'burn' | 'frozen' | 'paralyze' | 'slow'
+  | 'poison' | 'bleed' | 'curse' | 'weakness' | 'blind' | 'fear'
+  | 'regen' | 'haste' | 'barrier' | 'strength' | 'iron_skin';
+
+export type StatusEffectCategory = 'buff' | 'debuff';
+
 export interface StatusEffect {
-  type: 'burn' | 'frozen' | 'paralyze' | 'slow';
+  type: StatusEffectType;
   duration: number;
+  maxDuration: number;
   damage?: number;
+  stacks: number;
+  maxStacks: number;
+  tickInterval?: number;
+  tickTimer: number;
+  dispellable: boolean;
+  category: StatusEffectCategory;
+  source?: string;
+  value?: number;
+}
+
+export const STATUS_EFFECT_CONFIG: Record<StatusEffectType, {
+  category: StatusEffectCategory;
+  color: string;
+  name: string;
+  icon: string;
+  defaultDuration: number;
+  maxStacks: number;
+  tickInterval: number;
+  dispellable: boolean;
+}> = {
+  burn:      { category: 'debuff', color: '#ff6b35', name: '灼烧',   icon: '🔥', defaultDuration: 3000, maxStacks: 5, tickInterval: 500,  dispellable: true },
+  frozen:    { category: 'debuff', color: '#4ecdc4', name: '冰冻',   icon: '❄️', defaultDuration: 3000, maxStacks: 1, tickInterval: 0,    dispellable: true },
+  paralyze:  { category: 'debuff', color: '#ffe66d', name: '麻痹',   icon: '⚡', defaultDuration: 1000, maxStacks: 1, tickInterval: 0,    dispellable: true },
+  slow:      { category: 'debuff', color: '#74b9ff', name: '减速',   icon: '🐢', defaultDuration: 2000, maxStacks: 3, tickInterval: 0,    dispellable: true },
+  poison:    { category: 'debuff', color: '#a29bfe', name: '中毒',   icon: '☠️', defaultDuration: 5000, maxStacks: 5, tickInterval: 1000, dispellable: true },
+  bleed:     { category: 'debuff', color: '#d63031', name: '流血',   icon: '🩸', defaultDuration: 4000, maxStacks: 5, tickInterval: 800,  dispellable: true },
+  curse:     { category: 'debuff', color: '#6c5ce7', name: '诅咒',   icon: '💀', defaultDuration: 6000, maxStacks: 3, tickInterval: 0,    dispellable: false },
+  weakness:  { category: 'debuff', color: '#b2bec3', name: '虚弱',   icon: '💔', defaultDuration: 4000, maxStacks: 3, tickInterval: 0,    dispellable: true },
+  blind:     { category: 'debuff', color: '#636e72', name: '致盲',   icon: '🕶️', defaultDuration: 3000, maxStacks: 1, tickInterval: 0,    dispellable: true },
+  fear:      { category: 'debuff', color: '#e056a0', name: '恐惧',   icon: '😱', defaultDuration: 2000, maxStacks: 1, tickInterval: 0,    dispellable: true },
+  regen:     { category: 'buff',   color: '#7bed9f', name: '再生',   icon: '💚', defaultDuration: 8000, maxStacks: 3, tickInterval: 1000, dispellable: false },
+  haste:     { category: 'buff',   color: '#a29bfe', name: '急速',   icon: '💨', defaultDuration: 6000, maxStacks: 1, tickInterval: 0,    dispellable: false },
+  barrier:   { category: 'buff',   color: '#54a0ff', name: '护盾',   icon: '🛡️', defaultDuration: 8000, maxStacks: 3, tickInterval: 0,    dispellable: false },
+  strength:  { category: 'buff',   color: '#ff9f43', name: '力量',   icon: '⚔️', defaultDuration: 8000, maxStacks: 3, tickInterval: 0,    dispellable: false },
+  iron_skin: { category: 'buff',   color: '#48dbfb', name: '铁壁',   icon: '🧱', defaultDuration: 8000, maxStacks: 3, tickInterval: 0,    dispellable: false },
+};
+
+export function createStatusEffect(
+  type: StatusEffectType,
+  overrides?: Partial<StatusEffect>
+): StatusEffect {
+  const config = STATUS_EFFECT_CONFIG[type];
+  return {
+    type,
+    duration: overrides?.duration ?? config.defaultDuration,
+    maxDuration: overrides?.duration ?? config.defaultDuration,
+    damage: overrides?.damage,
+    stacks: overrides?.stacks ?? 1,
+    maxStacks: overrides?.maxStacks ?? config.maxStacks,
+    tickInterval: overrides?.tickInterval ?? config.tickInterval,
+    tickTimer: 0,
+    dispellable: overrides?.dispellable ?? config.dispellable,
+    category: config.category,
+    source: overrides?.source,
+    value: overrides?.value,
+  };
 }
 
 export interface Monster {
@@ -495,6 +567,7 @@ export interface Player {
   damageBoostTimer: number;
   damageBoostPercent: number;
   classType: ClassType | null;
+  statusEffects: StatusEffect[];
 }
 
 export interface GameState {

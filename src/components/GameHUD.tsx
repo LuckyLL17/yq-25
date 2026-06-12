@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { getGameEngine } from '../game/GameEngine';
 import { useGameStore } from '../store/gameStore';
-import { Heart, Skull, Swords, Map, Target, Package, Star, FlaskConical, Shield, Sword, Wind, PawPrint, Settings, Zap, Timer, Keyboard } from 'lucide-react';
-import type { RuneElement, Potion } from '../types/game';
+import { Heart, Skull, Swords, Map, Target, Package, Star, FlaskConical, Shield, Sword, Wind, PawPrint, Settings, Zap, Timer, Keyboard, AlertTriangle, X } from 'lucide-react';
+import type { RuneElement, Potion, StatusEffect } from '../types/game';
+import { STATUS_EFFECT_CONFIG } from '../types/game';
 import { formatTime } from '../data/challenges';
 import { DIFFICULTY_CONFIGS } from '../data/difficulty';
 import { loadSettings } from '../game/utils/storage';
@@ -43,8 +44,32 @@ interface BuffItem {
   color: string;
   remaining: number;
   duration: number;
-  source: 'shield' | 'attack' | 'defense' | 'speed';
+  source: 'shield' | 'attack' | 'defense' | 'speed' | 'status_effect';
+  category: 'buff' | 'debuff';
+  stacks: number;
+  dispellable: boolean;
 }
+
+const getStatusEffectIcon = (type: string) => {
+  switch (type) {
+    case 'burn': return '🔥';
+    case 'frozen': return '❄️';
+    case 'paralyze': return '⚡';
+    case 'slow': return '🐢';
+    case 'poison': return '☠️';
+    case 'bleed': return '🩸';
+    case 'curse': return '💀';
+    case 'weakness': return '💔';
+    case 'blind': return '🕶️';
+    case 'fear': return '😱';
+    case 'regen': return '💚';
+    case 'haste': return '💨';
+    case 'barrier': return '🛡️';
+    case 'strength': return '⚔️';
+    case 'iron_skin': return '🧱';
+    default: return '✨';
+  }
+};
 
 interface CombatTextItem {
   id: number;
@@ -165,6 +190,9 @@ const GameHUD = () => {
       remaining: player.shieldTimer,
       duration: 15000,
       source: 'shield',
+      category: 'buff',
+      stacks: 1,
+      dispellable: false,
     });
   }
 
@@ -177,6 +205,9 @@ const GameHUD = () => {
       remaining: player.damageBoostTimer,
       duration: potionBuffTimers['attack'] ? 15000 : 8000,
       source: 'attack',
+      category: 'buff',
+      stacks: 1,
+      dispellable: false,
     });
   }
 
@@ -189,6 +220,9 @@ const GameHUD = () => {
       remaining: potionBuffTimers['defense'],
       duration: 15000,
       source: 'defense',
+      category: 'buff',
+      stacks: 1,
+      dispellable: false,
     });
   }
 
@@ -201,7 +235,29 @@ const GameHUD = () => {
       remaining: potionBuffTimers['speed'],
       duration: 10000,
       source: 'speed',
+      category: 'buff',
+      stacks: 1,
+      dispellable: false,
     });
+  }
+
+  const playerStatusEffects = (player as any).statusEffects as StatusEffect[] | undefined;
+  if (playerStatusEffects) {
+    for (const se of playerStatusEffects) {
+      const config = STATUS_EFFECT_CONFIG[se.type];
+      buffs.push({
+        id: `se_${se.type}`,
+        name: config.name,
+        icon: <span className="text-sm">{getStatusEffectIcon(se.type)}</span>,
+        color: config.color,
+        remaining: se.duration,
+        duration: se.maxDuration,
+        source: 'status_effect',
+        category: se.category,
+        stacks: se.stacks,
+        dispellable: se.dispellable,
+      });
+    }
   }
 
   const settings = loadSettings();
@@ -334,7 +390,7 @@ const GameHUD = () => {
               <span className="text-yellow-300 text-xs font-bold">增益效果</span>
             </div>
             <div className="flex gap-2">
-              {buffs.map((buff) => {
+              {buffs.filter(b => b.category === 'buff').map((buff) => {
                 const progress = buff.remaining / buff.duration;
                 const circumference = 2 * Math.PI * 16;
                 return (
@@ -346,7 +402,7 @@ const GameHUD = () => {
                       backgroundColor: buff.color + '15',
                       boxShadow: `0 0 10px ${buff.color}30, inset 0 0 6px ${buff.color}15`,
                     }}
-                    title={`${buff.name} - ${(buff.remaining / 1000).toFixed(1)}秒`}
+                    title={`${buff.name}${buff.stacks > 1 ? ` x${buff.stacks}` : ''} - ${(buff.remaining / 1000).toFixed(1)}秒${buff.dispellable ? ' (可驱散)' : ''}`}
                   >
                     <div style={{ color: buff.color }} className="drop-shadow-md">
                       {buff.icon}
@@ -374,6 +430,12 @@ const GameHUD = () => {
                       />
                     </svg>
 
+                    {buff.stacks > 1 && (
+                      <div className="absolute -top-1.5 -left-1.5 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center border border-yellow-300">
+                        <span className="text-[8px] font-bold text-black font-mono">{buff.stacks}</span>
+                      </div>
+                    )}
+
                     <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 text-[9px] font-mono font-bold text-white bg-gray-900/95 px-1.5 rounded-sm border border-gray-600">
                       {Math.ceil(buff.remaining / 1000)}s
                     </div>
@@ -381,6 +443,74 @@ const GameHUD = () => {
                 );
               })}
             </div>
+            {buffs.filter(b => b.category === 'debuff').length > 0 && (
+              <>
+                <div className="flex items-center gap-1.5 mt-2 mb-2">
+                  <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+                  <span className="text-red-300 text-xs font-bold">负面效果</span>
+                </div>
+                <div className="flex gap-2">
+                  {buffs.filter(b => b.category === 'debuff').map((buff) => {
+                    const progress = buff.remaining / buff.duration;
+                    const circumference = 2 * Math.PI * 16;
+                    return (
+                      <div
+                        key={buff.id}
+                        className="relative w-11 h-11 rounded-lg border-2 flex items-center justify-center buff-icon-enter animate-pulse"
+                        style={{
+                          borderColor: buff.dispellable ? buff.color : '#636e72',
+                          backgroundColor: buff.color + '10',
+                          boxShadow: `0 0 8px ${buff.color}25`,
+                        }}
+                        title={`${buff.name}${buff.stacks > 1 ? ` x${buff.stacks}` : ''} - ${(buff.remaining / 1000).toFixed(1)}秒${buff.dispellable ? ' (可驱散)' : ' (不可驱散)'}`}
+                      >
+                        <div style={{ color: buff.color }} className="drop-shadow-md opacity-80">
+                          {buff.icon}
+                        </div>
+
+                        <svg className="absolute inset-0 w-full h-full -rotate-90">
+                          <circle
+                            cx="22"
+                            cy="22"
+                            r="16"
+                            fill="none"
+                            stroke="rgba(0,0,0,0.4)"
+                            strokeWidth="2.5"
+                          />
+                          <circle
+                            cx="22"
+                            cy="22"
+                            r="16"
+                            fill="none"
+                            stroke={buff.color}
+                            strokeWidth="2.5"
+                            strokeDasharray={`${progress * circumference} ${circumference}`}
+                            strokeLinecap="round"
+                            className="transition-all duration-200"
+                          />
+                        </svg>
+
+                        {buff.stacks > 1 && (
+                          <div className="absolute -top-1.5 -left-1.5 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center border border-red-300">
+                            <span className="text-[8px] font-bold text-white font-mono">{buff.stacks}</span>
+                          </div>
+                        )}
+
+                        {!buff.dispellable && (
+                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-gray-700 rounded-full flex items-center justify-center">
+                            <X className="w-2 h-2 text-gray-400" />
+                          </div>
+                        )}
+
+                        <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 text-[9px] font-mono font-bold bg-gray-900/95 px-1.5 rounded-sm border border-red-800/50" style={{ color: buff.color }}>
+                          {Math.ceil(buff.remaining / 1000)}s
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         )}
 

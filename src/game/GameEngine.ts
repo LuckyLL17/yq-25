@@ -1,4 +1,5 @@
-import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, Monster, MonsterSkill, MonsterProjectile, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, ShopItem, ClassType, PlayerClass, GameAction, AdventureDifficulty, MonsterState, SkillVFX, ScreenFlash, ColorFilter, ChantState } from '../types/game';
+import type { GameState, Player, Skill, Rune, Position, Projectile, Particle, DamageNumber, StatusEffect, StatusEffectType, Monster, MonsterSkill, MonsterProjectile, Chest, DailyChallenge, Pet, Equipment, EquipmentSlotType, Potion, PotionMaterial, Shop, ShopItem, ClassType, PlayerClass, GameAction, AdventureDifficulty, MonsterState, SkillVFX, ScreenFlash, ColorFilter, ChantState } from '../types/game';
+import { STATUS_EFFECT_CONFIG, createStatusEffect } from '../types/game';
 import { GAME_CONFIG } from '../data/config';
 import { generateDungeon, generateMonsters, generateChests, getPlayerStartPosition, updateFOV, isWalkable } from './utils/dungeon';
 import { getRandomRunes, createSkill, ALL_RUNES, SKILLS, getRuneById, getSkillWithRarityBonus } from '../data/runes';
@@ -79,6 +80,7 @@ export class GameEngine {
         damageBoostTimer: 0,
         damageBoostPercent: 0,
         classType: null,
+        statusEffects: [],
       },
       selectedClass: null,
       difficulty: 'adventurer',
@@ -185,6 +187,7 @@ export class GameEngine {
     this.updateScreenShake(deltaTime);
     this.updatePotionCooldowns(deltaTime);
     this.updatePotionBuffs(deltaTime);
+    this.updatePlayerStatusEffects(deltaTime);
     this.updateCamera();
     this.checkChestCollision();
     this.checkShopCollision();
@@ -212,10 +215,18 @@ export class GameEngine {
     if (this.isActionPressed('move_left') || this.keys.has('arrowleft')) { dx -= 1; player.direction = -1; }
     if (this.isActionPressed('move_right') || this.keys.has('arrowright')) { dx += 1; player.direction = 1; }
     
+    const playerSpeedMultiplier = this.getSpeedMultiplier(player.statusEffects);
+    const effectiveSpeed = player.speed * playerSpeedMultiplier;
+
+    if (player.statusEffects.some(e => e.type === 'fear')) {
+      if (dx !== 0) dx = -dx;
+      if (dy !== 0) dy = -dy;
+    }
+    
     if (dx !== 0 || dy !== 0) {
       const normalized = normalize({ x: dx, y: dy });
-      const newX = player.position.x + normalized.x * player.speed * dt;
-      const newY = player.position.y + normalized.y * player.speed * dt;
+      const newX = player.position.x + normalized.x * effectiveSpeed * dt;
+      const newY = player.position.y + normalized.y * effectiveSpeed * dt;
       
       if (this.state.dungeon && isWalkable(this.state.dungeon, newX, player.position.y)) {
         player.position.x = newX;
@@ -253,11 +264,13 @@ export class GameEngine {
       const saveData = loadSaveData();
       const talentEffects = calculateTalentEffects(saveData.unlockedTalents);
       const fovRadius = GAME_CONFIG.FOV_RADIUS + talentEffects.fov;
+      const blindEffect = player.statusEffects.find(e => e.type === 'blind');
+      const effectiveFov = blindEffect ? fovRadius * 0.4 : fovRadius;
       
       this.state.dungeon = updateFOV(
         this.state.dungeon,
         player.position,
-        fovRadius
+        effectiveFov
       );
     }
   }
@@ -271,11 +284,7 @@ export class GameEngine {
 
       this.updateStatusEffects(monster, deltaTime);
 
-      let speedMultiplier = 1;
-      const frozen = monster.statusEffects.find(s => s.type === 'frozen');
-      const slowed = monster.statusEffects.find(s => s.type === 'slow');
-      if (frozen) speedMultiplier = 0;
-      else if (slowed) speedMultiplier = 0.5;
+      const speedMultiplier = this.getSpeedMultiplier(monster.statusEffects);
 
       const dist = distance(monster.position, player.position);
 
@@ -659,6 +668,10 @@ export class GameEngine {
           size: monster.isBoss ? 8 : 5,
           color: this.getMonsterSkillColor(skill),
           sourceId: monster.id,
+          statusEffectType: skill.statusEffectType,
+          statusEffectChance: skill.statusEffectChance,
+          statusEffectDuration: skill.statusEffectDuration,
+          statusEffectDamage: skill.statusEffectDamage,
         };
         this.state.monsterProjectiles.push(proj);
         for (let i = 0; i < 6; i++) {
@@ -686,6 +699,12 @@ export class GameEngine {
         }
         if (dist < radius && this.state.player.invincible <= 0) {
           this.damagePlayer(skill.damage, skill.element || monster.element);
+          if (skill.statusEffectType && Math.random() < (skill.statusEffectChance || 0.3)) {
+            this.applyStatusEffect(this.state.player, skill.statusEffectType, {
+              duration: skill.statusEffectDuration,
+              damage: skill.statusEffectDamage,
+            });
+          }
         }
         break;
       }
@@ -798,6 +817,12 @@ export class GameEngine {
       const distToPlayer = distance(proj.position, this.state.player.position);
       if (distToPlayer < 20 + proj.size && this.state.player.invincible <= 0) {
         this.damagePlayer(proj.damage, proj.element);
+        if (proj.statusEffectType && Math.random() < (proj.statusEffectChance || 0.3)) {
+          this.applyStatusEffect(this.state.player, proj.statusEffectType, {
+            duration: proj.statusEffectDuration,
+            damage: proj.statusEffectDamage,
+          });
+        }
         this.addScreenFlash(proj.color, 0.2, 150);
         this.state.monsterProjectiles.splice(i, 1);
         continue;
@@ -1217,22 +1242,144 @@ export class GameEngine {
     }
   }
   
-  private updateStatusEffects(entity: Monster, deltaTime: number) {
+  private updateStatusEffects(entity: { statusEffects: StatusEffect[]; hp: number; position: Position }, deltaTime: number, isPlayer: boolean = false) {
+    const maxHp = (entity as any).maxHp || 9999;
     for (let i = entity.statusEffects.length - 1; i >= 0; i--) {
       const effect = entity.statusEffects[i];
       effect.duration -= deltaTime;
-      
-      if (effect.type === 'burn' && effect.damage) {
-        if (Math.random() < 0.02) {
-          entity.hp -= effect.damage;
-          this.addDamageNumber(entity.position, effect.damage, '#ff6b35', false);
+      const config = STATUS_EFFECT_CONFIG[effect.type];
+
+      if (effect.type === 'regen') {
+        effect.tickTimer += deltaTime;
+        const regenInterval = effect.tickInterval || 1000;
+        while (effect.tickTimer >= regenInterval) {
+          effect.tickTimer -= regenInterval;
+          const healAmount = (effect.value || 2) * effect.stacks;
+          entity.hp = Math.min(maxHp, entity.hp + healAmount);
+          this.addDamageNumber(entity.position, healAmount, config.color, false);
+          this.addParticle(
+            entity.position.x + (Math.random() - 0.5) * 20,
+            entity.position.y + (Math.random() - 0.5) * 20,
+            config.color,
+            'magic'
+          );
+        }
+      } else if (effect.tickInterval && effect.tickInterval > 0 && effect.damage) {
+        effect.tickTimer += deltaTime;
+        while (effect.tickTimer >= effect.tickInterval) {
+          effect.tickTimer -= effect.tickInterval;
+          const tickDamage = effect.damage * effect.stacks;
+          entity.hp -= tickDamage;
+          this.addDamageNumber(entity.position, tickDamage, config.color, false);
+          this.addParticle(
+            entity.position.x + (Math.random() - 0.5) * 16,
+            entity.position.y + (Math.random() - 0.5) * 16,
+            config.color,
+            effect.type === 'burn' ? 'spark' : 'magic'
+          );
         }
       }
-      
+
       if (effect.duration <= 0) {
         entity.statusEffects.splice(i, 1);
       }
     }
+
+    if (entity.hp < 0) entity.hp = 0;
+  }
+
+  private applyStatusEffect(
+    target: { statusEffects: StatusEffect[] },
+    effectType: StatusEffectType,
+    overrides?: Partial<StatusEffect>
+  ) {
+    const existing = target.statusEffects.find(e => e.type === effectType);
+
+    if (existing) {
+      existing.duration = Math.max(existing.duration, overrides?.duration ?? STATUS_EFFECT_CONFIG[effectType].defaultDuration);
+      existing.maxDuration = Math.max(existing.maxDuration, existing.duration);
+      if (existing.stacks < existing.maxStacks) {
+        existing.stacks = Math.min(existing.maxStacks, existing.stacks + (overrides?.stacks ?? 1));
+      }
+      if (overrides?.damage) {
+        existing.damage = Math.max(existing.damage ?? 0, overrides.damage);
+      }
+      if (overrides?.value) {
+        existing.value = Math.max(existing.value ?? 0, overrides.value);
+      }
+      existing.tickTimer = 0;
+    } else {
+      const newEffect = createStatusEffect(effectType, overrides);
+      target.statusEffects.push(newEffect);
+    }
+  }
+
+  private dispelStatusEffects(
+    target: { statusEffects: StatusEffect[] },
+    category?: 'buff' | 'debuff',
+    count: number = 1
+  ): number {
+    let dispelled = 0;
+    for (let i = target.statusEffects.length - 1; i >= 0 && dispelled < count; i--) {
+      const effect = target.statusEffects[i];
+      if (effect.dispellable) {
+        if (!category || effect.category === category) {
+          target.statusEffects.splice(i, 1);
+          dispelled++;
+        }
+      }
+    }
+    return dispelled;
+  }
+
+  private getSpeedMultiplier(effects: StatusEffect[]): number {
+    let multiplier = 1;
+    for (const effect of effects) {
+      switch (effect.type) {
+        case 'frozen': return 0;
+        case 'paralyze': return 0;
+        case 'slow': multiplier *= (1 - 0.2 * effect.stacks); break;
+        case 'haste': multiplier *= (1 + 0.3 * effect.stacks); break;
+        case 'fear': multiplier *= 0.5; break;
+      }
+    }
+    return Math.max(0, multiplier);
+  }
+
+  private getDamageMultiplier(effects: StatusEffect[]): number {
+    let multiplier = 1;
+    for (const effect of effects) {
+      switch (effect.type) {
+        case 'weakness': multiplier *= (1 - 0.15 * effect.stacks); break;
+        case 'curse': multiplier *= (1 - 0.1 * effect.stacks); break;
+        case 'strength': multiplier *= (1 + 0.2 * effect.stacks); break;
+      }
+    }
+    return Math.max(0.1, multiplier);
+  }
+
+  private getDefenseMultiplier(effects: StatusEffect[]): number {
+    let multiplier = 1;
+    for (const effect of effects) {
+      switch (effect.type) {
+        case 'curse': multiplier *= (1 + 0.1 * effect.stacks); break;
+        case 'iron_skin': multiplier *= (1 - 0.2 * effect.stacks); break;
+        case 'barrier': multiplier *= (1 - 0.15 * effect.stacks); break;
+      }
+    }
+    return Math.max(0.1, multiplier);
+  }
+
+  private getBarrierAmount(effects: StatusEffect[]): number {
+    const barrier = effects.find(e => e.type === 'barrier');
+    if (!barrier) return 0;
+    return (barrier.value || 10) * barrier.stacks;
+  }
+
+  private updatePlayerStatusEffects(deltaTime: number) {
+    const player = this.state.player;
+    this.updateStatusEffects(player, deltaTime, true);
+    player.statusEffects = player.statusEffects.filter(e => e.duration > 0);
   }
   
   private updateProjectiles(deltaTime: number) {
@@ -1781,6 +1928,7 @@ export class GameEngine {
     this.state.monsters = newMonsters;
     this.state.chests = newChests;
     this.state.player.position = { ...startPos };
+    this.state.player.statusEffects = [];
     this.state.projectiles = [];
     this.state.monsterProjectiles = [];
     this.state.particles = [];
@@ -1896,6 +2044,7 @@ export class GameEngine {
       damageBoostTimer: 0,
       damageBoostPercent: 0,
       classType: classId,
+      statusEffects: [],
     };
     
     const selectedPetType = saveData.selectedPet || 'fire_dragonling';
@@ -2224,6 +2373,7 @@ export class GameEngine {
       damageBoostTimer: 0,
       damageBoostPercent: 0,
       classType: null,
+      statusEffects: [],
     };
     
     const challengeSaveData = loadSaveData();
@@ -2329,6 +2479,10 @@ export class GameEngine {
         
       case 'attack':
         if (target === 'player') {
+          this.applyStatusEffect(this.state.player, 'strength', {
+            duration: potion.duration || 15000,
+            value: potion.value,
+          });
           this.state.player.damageBoostPercent = Math.max(this.state.player.damageBoostPercent, potion.value);
           this.state.player.damageBoostTimer = Math.max(this.state.player.damageBoostTimer, potion.duration || 15000);
           this.state.potionBuffTimers['attack'] = potion.duration || 15000;
@@ -2347,6 +2501,10 @@ export class GameEngine {
         
       case 'defense':
         if (target === 'player') {
+          this.applyStatusEffect(this.state.player, 'iron_skin', {
+            duration: potion.duration || 15000,
+            value: potion.value,
+          });
           this.state.player.shieldTimer = Math.max(this.state.player.shieldTimer, potion.duration || 15000);
           this.state.potionBuffTimers['defense'] = potion.duration || 15000;
           success = true;
@@ -2364,6 +2522,10 @@ export class GameEngine {
         
       case 'speed':
         if (target === 'player') {
+          this.applyStatusEffect(this.state.player, 'haste', {
+            duration: potion.duration || 10000,
+            value: potion.value,
+          });
           this.state.player.speed = GAME_CONFIG.PLAYER_SPEED * (1 + potion.value / 100);
           this.state.potionBuffTimers['speed'] = potion.duration || 10000;
           success = true;
@@ -2455,6 +2617,18 @@ export class GameEngine {
   
   public getPotionCooldown(potionTemplateId: string): number {
     return this.state.potionCooldowns[potionTemplateId] || 0;
+  }
+
+  public dispelPlayerDebuffs(count: number = 1): number {
+    return this.dispelStatusEffects(this.state.player, 'debuff', count);
+  }
+
+  public dispelAllPlayerDebuffs(): number {
+    return this.dispelStatusEffects(this.state.player, 'debuff', 99);
+  }
+
+  public applyPlayerBuff(effectType: StatusEffectType, overrides?: Partial<StatusEffect>) {
+    this.applyStatusEffect(this.state.player, effectType, overrides);
   }
   
   public buyShopItem(itemId: string): boolean {
@@ -2935,6 +3109,10 @@ export class GameEngine {
     let finalDamage = damageResult.damage;
     let actuallyCrit = damageResult.isCrit;
     const elementMultiplier = damageResult.elementMultiplier;
+
+    const playerDmgMultiplier = this.getDamageMultiplier(this.state.player.statusEffects);
+    const monsterDefMultiplier = this.getDefenseMultiplier(monster.statusEffects);
+    finalDamage = Math.floor(finalDamage * playerDmgMultiplier / monsterDefMultiplier);
     
     if (elementMultiplier > 1) {
       const superText = `克制! x${elementMultiplier}`;
@@ -2965,28 +3143,18 @@ export class GameEngine {
     }
 
     if (element === 'fire') {
-      if (!monster.statusEffects.find(s => s.type === 'burn')) {
-        monster.statusEffects.push({
-          type: 'burn',
-          duration: 3000,
-          damage: 3,
-        });
-      }
+      this.applyStatusEffect(monster, 'burn', { damage: 3, duration: 3000 });
     } else if (element === 'ice') {
       const effectType = effect === 'time' ? 'frozen' : 'slow';
-      if (!monster.statusEffects.find(s => s.type === effectType)) {
-        monster.statusEffects.push({
-          type: effectType,
-          duration: effect === 'time' ? 3000 : 2000,
-        });
-      }
+      this.applyStatusEffect(monster, effectType, { duration: effect === 'time' ? 3000 : 2000 });
     } else if (element === 'thunder') {
-      if (Math.random() < 0.3 && !monster.statusEffects.find(s => s.type === 'paralyze')) {
-        monster.statusEffects.push({
-          type: 'paralyze',
-          duration: 1000,
-        });
+      if (Math.random() < 0.3) {
+        this.applyStatusEffect(monster, 'paralyze', { duration: 1000 });
       }
+    }
+
+    if (effect === 'power' && Math.random() < 0.3) {
+      this.applyStatusEffect(monster, 'bleed', { damage: 2, duration: 4000 });
     }
     
     if (monster.hp <= 0) {
@@ -3077,13 +3245,29 @@ export class GameEngine {
     const combatStats = calculatePlayerCombatStats(classStats, equipmentStats, talentEffects);
     const playerElement = this.getPlayerPrimaryElement();
     
-    const finalDamage = calculateMonsterDamage(
+    let finalDamage = calculateMonsterDamage(
       damage,
       attackerElement,
       playerElement,
       combatStats,
       this.state.player.shieldTimer > 0
     );
+
+    const barrierAmount = this.getBarrierAmount(this.state.player.statusEffects);
+    if (barrierAmount > 0) {
+      const absorbed = Math.min(barrierAmount, finalDamage);
+      finalDamage -= absorbed;
+      const barrierEffect = this.state.player.statusEffects.find(e => e.type === 'barrier');
+      if (barrierEffect) {
+        barrierEffect.value = Math.max(0, (barrierEffect.value || 10) - absorbed / barrierEffect.stacks);
+        if ((barrierEffect.value || 0) <= 0) {
+          this.state.player.statusEffects = this.state.player.statusEffects.filter(e => e.type !== 'barrier');
+        }
+      }
+    }
+
+    const defenseMultiplier = this.getDefenseMultiplier(this.state.player.statusEffects);
+    finalDamage = Math.floor(finalDamage * defenseMultiplier);
     
     this.state.player.hp -= finalDamage;
     this.state.player.invincible = GAME_CONFIG.INVINCIBLE_DURATION;
@@ -3108,6 +3292,43 @@ export class GameEngine {
         '#ff4757',
         'spark'
       );
+    }
+
+    if (attackerElement === 'fire' && Math.random() < 0.25) {
+      this.applyStatusEffect(this.state.player, 'burn', { damage: 2, duration: 3000 });
+    }
+    if (attackerElement === 'ice') {
+      if (Math.random() < 0.35) {
+        this.applyStatusEffect(this.state.player, 'slow', { duration: 2000 });
+      }
+      if (Math.random() < 0.1) {
+        this.applyStatusEffect(this.state.player, 'frozen', { duration: 1500 });
+      }
+    }
+    if (attackerElement === 'thunder' && Math.random() < 0.15) {
+      this.applyStatusEffect(this.state.player, 'paralyze', { duration: 800 });
+    }
+
+    const monster = this.state.monsters.find(m => 
+      distance(m.position, this.state.player.position) < 50 && m.hp > 0
+    );
+    if (monster) {
+      if (monster.type === 'slime' || monster.type === 'goblin') {
+        if (Math.random() < 0.2) {
+          this.applyStatusEffect(this.state.player, 'poison', { damage: 1, duration: 4000 });
+        }
+      }
+      if (monster.isBoss && monster.bossType === 'swamp_hydra') {
+        if (Math.random() < 0.4) {
+          this.applyStatusEffect(this.state.player, 'poison', { damage: 2, duration: 5000 });
+        }
+      }
+      if (monster.aiType === 'caster' && Math.random() < 0.2) {
+        this.applyStatusEffect(this.state.player, 'curse', { duration: 4000 });
+      }
+      if (monster.aiType === 'boss' && Math.random() < 0.15) {
+        this.applyStatusEffect(this.state.player, 'weakness', { duration: 3000 });
+      }
     }
   }
   
@@ -3528,14 +3749,63 @@ export class GameEngine {
         if (monster.statusEffects.length > 0) {
           for (let i = 0; i < monster.statusEffects.length; i++) {
             const effect = monster.statusEffects[i];
-            let effectColor = '#ffffff';
-            if (effect.type === 'burn') effectColor = '#ff6b35';
-            else if (effect.type === 'frozen') effectColor = '#4ecdc4';
-            else if (effect.type === 'slow') effectColor = '#74b9ff';
-            else if (effect.type === 'paralyze') effectColor = '#ffe66d';
-            
+            const config = STATUS_EFFECT_CONFIG[effect.type];
+            const effectColor = config.color;
+            const effectX = screenX - 10 + i * 7;
+            const effectY = screenY - (monster.isBoss ? 24 : 14) - 12;
+
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(effectX - 1, effectY - 1, 6, 6);
+
             ctx.fillStyle = effectColor;
-            ctx.fillRect(screenX - 10 + i * 6, screenY - (monster.isBoss ? 24 : 14) - 12, 4, 4);
+            ctx.fillRect(effectX, effectY, 4, 4);
+
+            const timeProgress = effect.duration / effect.maxDuration;
+            ctx.globalAlpha = 0.5;
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(effectX, effectY + 4 * (1 - timeProgress), 4, 4 * (1 - timeProgress));
+            ctx.globalAlpha = 1;
+
+            if (effect.stacks > 1) {
+              ctx.fillStyle = '#ffffff';
+              ctx.font = 'bold 5px monospace';
+              ctx.textAlign = 'center';
+              ctx.fillText(String(effect.stacks), effectX + 2, effectY + 3);
+            }
+          }
+
+          const debuffs = monster.statusEffects.filter(e => e.category === 'debuff');
+          if (debuffs.length > 0) {
+            const time = Date.now();
+            ctx.globalAlpha = 0.15 + Math.sin(time / 300) * 0.1;
+            ctx.fillStyle = '#ff0000';
+            ctx.beginPath();
+            ctx.arc(screenX, screenY, monster.isBoss ? 22 : 16, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
+
+          if (monster.statusEffects.some(e => e.type === 'frozen')) {
+            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = '#4ecdc4';
+            ctx.beginPath();
+            ctx.arc(screenX, screenY, monster.isBoss ? 20 : 14, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
+
+          if (monster.statusEffects.some(e => e.type === 'poison')) {
+            const time = Date.now();
+            ctx.globalAlpha = 0.2;
+            ctx.fillStyle = '#a29bfe';
+            for (let j = 0; j < 3; j++) {
+              const bubbleX = screenX + Math.sin(time / 400 + j * 2.1) * 8;
+              const bubbleY = screenY - 8 + Math.cos(time / 350 + j * 1.7) * 5;
+              ctx.beginPath();
+              ctx.arc(bubbleX, bubbleY, 2, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.globalAlpha = 1;
           }
         }
       }
@@ -3549,18 +3819,22 @@ export class GameEngine {
       drawFox(ctx, playerScreenX, playerScreenY, player.direction, player.animFrame, 2);
     }
 
-    const playerBuffs: { color: string; remaining: number; duration: number }[] = [];
+    const playerBuffs: { color: string; remaining: number; duration: number; stacks: number; type: string; category: string }[] = [];
     if (player.shieldTimer > 0) {
-      playerBuffs.push({ color: '#54a0ff', remaining: player.shieldTimer, duration: 15000 });
+      playerBuffs.push({ color: '#54a0ff', remaining: player.shieldTimer, duration: 15000, stacks: 1, type: 'shield', category: 'buff' });
     }
     if (player.damageBoostTimer > 0) {
-      playerBuffs.push({ color: '#ff9f43', remaining: player.damageBoostTimer, duration: this.state.potionBuffTimers['attack'] ? 15000 : 8000 });
+      playerBuffs.push({ color: '#ff9f43', remaining: player.damageBoostTimer, duration: this.state.potionBuffTimers['attack'] ? 15000 : 8000, stacks: 1, type: 'attack', category: 'buff' });
     }
     if (this.state.potionBuffTimers['defense'] && this.state.potionBuffTimers['defense'] > 0) {
-      playerBuffs.push({ color: '#48dbfb', remaining: this.state.potionBuffTimers['defense'], duration: 15000 });
+      playerBuffs.push({ color: '#48dbfb', remaining: this.state.potionBuffTimers['defense'], duration: 15000, stacks: 1, type: 'defense', category: 'buff' });
     }
     if (this.state.potionBuffTimers['speed'] && this.state.potionBuffTimers['speed'] > 0) {
-      playerBuffs.push({ color: '#a29bfe', remaining: this.state.potionBuffTimers['speed'], duration: 10000 });
+      playerBuffs.push({ color: '#a29bfe', remaining: this.state.potionBuffTimers['speed'], duration: 10000, stacks: 1, type: 'speed', category: 'buff' });
+    }
+    for (const se of player.statusEffects) {
+      const config = STATUS_EFFECT_CONFIG[se.type];
+      playerBuffs.push({ color: config.color, remaining: se.duration, duration: se.maxDuration, stacks: se.stacks, type: se.type, category: se.category });
     }
 
     const buffIconSize = 6;
@@ -3573,6 +3847,7 @@ export class GameEngine {
       const buff = playerBuffs[i];
       const bx = buffStartX + i * (buffIconSize + buffSpacing);
       const progress = buff.remaining / buff.duration;
+      const isDebuff = buff.category === 'debuff';
 
       ctx.globalAlpha = 0.3;
       ctx.fillStyle = '#000000';
@@ -3591,13 +3866,76 @@ export class GameEngine {
       ctx.fillRect(bx, buffY, buffIconSize, buffIconSize);
 
       ctx.globalAlpha = 1;
+
+      if (buff.stacks > 1) {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 5px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(buff.stacks), bx + buffIconSize / 2, buffY + buffIconSize - 1);
+      }
+
       const timeSeconds = Math.ceil(buff.remaining / 1000);
       if (timeSeconds <= 3) {
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = isDebuff ? '#ff6b6b' : '#ffffff';
         ctx.font = 'bold 6px monospace';
         ctx.textAlign = 'center';
         ctx.fillText(String(timeSeconds), bx + buffIconSize / 2, buffY + buffIconSize + 5);
       }
+
+      if (isDebuff) {
+        ctx.globalAlpha = 0.5 + Math.sin(Date.now() / 200) * 0.2;
+        ctx.strokeStyle = '#ff4757';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx - 0.5, buffY - 0.5, buffIconSize + 1, buffIconSize + 1);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    const playerDebuffs = player.statusEffects.filter(e => e.category === 'debuff');
+    if (playerDebuffs.length > 0) {
+      const time = Date.now();
+      ctx.globalAlpha = 0.1 + Math.sin(time / 300) * 0.05;
+      ctx.fillStyle = '#ff0000';
+      ctx.beginPath();
+      ctx.arc(playerScreenX, playerScreenY, 18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    if (player.statusEffects.some(e => e.type === 'frozen')) {
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = '#4ecdc4';
+      ctx.beginPath();
+      ctx.arc(playerScreenX, playerScreenY, 16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    if (player.statusEffects.some(e => e.type === 'poison')) {
+      const time = Date.now();
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = '#a29bfe';
+      for (let j = 0; j < 4; j++) {
+        const bubbleX = playerScreenX + Math.sin(time / 400 + j * 1.57) * 10;
+        const bubbleY = playerScreenY - 6 + Math.cos(time / 350 + j * 1.57) * 8;
+        ctx.beginPath();
+        ctx.arc(bubbleX, bubbleY, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    if (player.statusEffects.some(e => e.type === 'barrier')) {
+      const barrier = player.statusEffects.find(e => e.type === 'barrier');
+      const barrierVal = this.getBarrierAmount(player.statusEffects);
+      const time = Date.now();
+      ctx.globalAlpha = 0.2 + Math.sin(time / 250) * 0.1;
+      ctx.strokeStyle = '#54a0ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(playerScreenX, playerScreenY, 18, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
     }
     
     const pet = this.state.pet;

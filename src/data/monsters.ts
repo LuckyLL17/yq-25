@@ -38,6 +38,9 @@ const CASTER_SKILLS: MonsterSkill[] = [
     type: 'aoe',
     element: 'ice',
     aoeRadius: 60,
+    statusEffectType: 'slow',
+    statusEffectChance: 0.5,
+    statusEffectDuration: 2000,
   },
 ];
 
@@ -52,6 +55,9 @@ const SUMMONER_SKILLS: MonsterSkill[] = [
     type: 'projectile',
     element: 'thunder',
     projectileSpeed: 150,
+    statusEffectType: 'curse',
+    statusEffectChance: 0.3,
+    statusEffectDuration: 4000,
   },
   {
     id: 'raise_minion',
@@ -343,8 +349,8 @@ export const BOSS_TEMPLATES: Record<BossType, {
     attackRange: 200,
     element: 'thunder',
     skills: [
-      { id: 'death_ray', name: '死亡射线', damage: 28, range: 230, cooldown: 3000, currentCooldown: 0, type: 'projectile', element: 'thunder', projectileSpeed: 320 },
-      { id: 'soul_drain', name: '灵魂汲取', damage: 20, range: 80, cooldown: 6000, currentCooldown: 0, type: 'aoe', aoeRadius: 70 },
+      { id: 'death_ray', name: '死亡射线', damage: 28, range: 230, cooldown: 3000, currentCooldown: 0, type: 'projectile', element: 'thunder', projectileSpeed: 320, statusEffectType: 'curse', statusEffectChance: 0.4, statusEffectDuration: 5000 },
+      { id: 'soul_drain', name: '灵魂汲取', damage: 20, range: 80, cooldown: 6000, currentCooldown: 0, type: 'aoe', aoeRadius: 70, statusEffectType: 'weakness', statusEffectChance: 0.5, statusEffectDuration: 4000 },
       { id: 'raise_dead', name: '亡灵复苏', damage: 0, range: 120, cooldown: 10000, currentCooldown: 0, type: 'summon', summonType: 'skeleton', summonCount: 4 },
       { id: 'lich_heal', name: '巫妖再生', damage: 0, range: 0, cooldown: 12000, currentCooldown: 0, type: 'heal', healPercent: 0.25 },
     ],
@@ -360,8 +366,8 @@ export const BOSS_TEMPLATES: Record<BossType, {
     attackRange: 50,
     element: 'fire',
     skills: [
-      { id: 'poison_spit', name: '毒液喷射', damage: 18, range: 160, cooldown: 3000, currentCooldown: 0, type: 'projectile', element: 'fire', projectileSpeed: 220 },
-      { id: 'acid_pool', name: '酸液池', damage: 22, range: 80, cooldown: 5000, currentCooldown: 0, type: 'aoe', aoeRadius: 75 },
+      { id: 'poison_spit', name: '毒液喷射', damage: 18, range: 160, cooldown: 3000, currentCooldown: 0, type: 'projectile', element: 'fire', projectileSpeed: 220, statusEffectType: 'poison', statusEffectChance: 0.8, statusEffectDuration: 5000, statusEffectDamage: 2 },
+      { id: 'acid_pool', name: '酸液池', damage: 22, range: 80, cooldown: 5000, currentCooldown: 0, type: 'aoe', aoeRadius: 75, statusEffectType: 'weakness', statusEffectChance: 0.6, statusEffectDuration: 3000 },
       { id: 'hydra_regen', name: '九头蛇再生', damage: 0, range: 0, cooldown: 10000, currentCooldown: 0, type: 'heal', healPercent: 0.2 },
     ],
   },
